@@ -1,0 +1,1157 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Yunan Trafik İşaretleri – YunancaOkulu</title>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@300;400;600;700&family=Noto+Serif:ital,wght@0,400;1,400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f5f2eb;
+    --card: #ffffff;
+    --accent: #1a5c96;
+    --accent2: #c8392b;
+    --text: #1a1a2e;
+    --muted: #6b7280;
+    --border: #e2ddd4;
+    --tag-bg: #e8f0f9;
+    --tag-text: #1a5c96;
+    --shadow: 0 2px 12px rgba(26,92,150,0.08);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Sora', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* HEADER */
+  header {
+    background: var(--accent);
+    color: white;
+    padding: 2.5rem 2rem 2rem;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -40px; right: -40px;
+    width: 220px; height: 220px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.06);
+  }
+  header::after {
+    content: '';
+    position: absolute;
+    bottom: -60px; left: 30%;
+    width: 300px; height: 300px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+  }
+  .header-inner {
+    max-width: 1100px;
+    margin: 0 auto;
+    position: relative;
+    z-index: 1;
+  }
+  .header-label {
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    opacity: 0.7;
+    margin-bottom: 0.5rem;
+  }
+  header h1 {
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    font-weight: 700;
+    line-height: 1.2;
+    margin-bottom: 0.5rem;
+  }
+  header h1 span { color: #7ec8f7; }
+  header p {
+    font-size: 0.92rem;
+    opacity: 0.8;
+    max-width: 560px;
+    line-height: 1.6;
+  }
+  .header-stats {
+    display: flex;
+    gap: 2rem;
+    margin-top: 1.5rem;
+    flex-wrap: wrap;
+  }
+  .stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.1rem;
+  }
+  .stat-num {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #7ec8f7;
+  }
+  .stat-label {
+    font-size: 0.72rem;
+    opacity: 0.65;
+    letter-spacing: 0.05em;
+  }
+
+  /* CONTROLS */
+  .controls {
+    max-width: 1100px;
+    margin: 2rem auto 1rem;
+    padding: 0 1.5rem;
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .search-wrap {
+    position: relative;
+    flex: 1;
+    min-width: 200px;
+  }
+  .search-wrap svg {
+    position: absolute;
+    left: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--muted);
+  }
+  input[type="search"] {
+    width: 100%;
+    padding: 0.65rem 1rem 0.65rem 2.4rem;
+    border: 1.5px solid var(--border);
+    border-radius: 8px;
+    background: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 0.9rem;
+    color: var(--text);
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  input[type="search"]:focus { border-color: var(--accent); }
+
+  .filter-btns {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .filter-btn {
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    border: 1.5px solid var(--border);
+    background: white;
+    font-family: 'Sora', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 500;
+    cursor: pointer;
+    color: var(--muted);
+    transition: all 0.18s;
+    white-space: nowrap;
+  }
+  .filter-btn:hover, .filter-btn.active {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: white;
+  }
+
+  /* GRID */
+  .grid {
+    max-width: 1100px;
+    margin: 0 auto 3rem;
+    padding: 0 1.5rem;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: 1.2rem;
+  }
+
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    border: 1.5px solid var(--border);
+    padding: 1.4rem 1rem 1.2rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    box-shadow: var(--shadow);
+    transition: transform 0.18s, box-shadow 0.18s, border-color 0.18s;
+    cursor: pointer;
+    animation: fadeIn 0.4s ease both;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(26,92,150,0.13);
+    border-color: var(--accent);
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card-code {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    background: var(--tag-bg);
+    padding: 0.2rem 0.55rem;
+    border-radius: 4px;
+    align-self: flex-start;
+  }
+
+  .card-img {
+    width: 90px;
+    height: 90px;
+    object-fit: contain;
+    border-radius: 6px;
+  }
+  .card-img-placeholder {
+    width: 90px;
+    height: 90px;
+    background: var(--bg);
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    color: var(--muted);
+    text-align: center;
+    border: 1px dashed var(--border);
+  }
+
+  .card-tr {
+    font-size: 0.84rem;
+    font-weight: 600;
+    text-align: center;
+    color: var(--text);
+    line-height: 1.35;
+  }
+  .card-gr {
+    font-size: 0.74rem;
+    color: var(--muted);
+    text-align: center;
+    font-style: italic;
+    font-family: 'Noto Serif', serif;
+    line-height: 1.4;
+  }
+
+  .card.hidden { display: none; }
+
+  /* EMPTY STATE */
+  .empty {
+    grid-column: 1/-1;
+    text-align: center;
+    padding: 3rem;
+    color: var(--muted);
+    font-size: 0.9rem;
+  }
+
+  /* MODAL */
+  .overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.5);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: white;
+    border-radius: 18px;
+    padding: 2rem;
+    max-width: 460px;
+    width: 100%;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+    animation: modalIn 0.2s ease;
+  }
+  @keyframes modalIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+  .modal-close {
+    position: absolute;
+    top: 1rem; right: 1rem;
+    background: none;
+    border: none;
+    font-size: 1.3rem;
+    cursor: pointer;
+    color: var(--muted);
+    line-height: 1;
+  }
+  .modal-code {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+    background: var(--tag-bg);
+    padding: 0.25rem 0.6rem;
+    border-radius: 4px;
+    display: inline-block;
+    margin-bottom: 1rem;
+  }
+  .modal-img {
+    width: 120px;
+    height: 120px;
+    object-fit: contain;
+    display: block;
+    margin: 0 auto 1rem;
+  }
+  .modal-tr {
+    font-size: 1.1rem;
+    font-weight: 700;
+    text-align: center;
+    margin-bottom: 0.4rem;
+    color: var(--text);
+  }
+  .modal-gr {
+    font-size: 0.88rem;
+    color: var(--muted);
+    text-align: center;
+    font-family: 'Noto Serif', serif;
+    font-style: italic;
+    margin-bottom: 1.2rem;
+    padding-bottom: 1.2rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .modal-desc {
+    font-size: 0.88rem;
+    line-height: 1.65;
+    color: #374151;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem;
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-inner">
+    <div class="header-label">YunancaOkulu · Referans</div>
+    <h1>Yunan Trafik <span>İşaretleri</span></h1>
+    <p>Yunanistan Karayolları Trafik Kanunu (ΚΟΚ) Madde 4 — Düzenleyici İşaretler (Ρ1–Ρ77) Türkçe açıklamalarıyla.</p>
+    <div class="header-stats">
+      <div class="stat"><span class="stat-num">77</span><span class="stat-label">İşaret</span></div>
+      <div class="stat"><span class="stat-num">P-1</span><span class="stat-label">İlk işaret</span></div>
+      <div class="stat"><span class="stat-num">P-77</span><span class="stat-label">Son işaret</span></div>
+    </div>
+  </div>
+</header>
+
+<div class="controls">
+  <div class="search-wrap">
+    <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input type="search" id="search" placeholder="İşaret kodu veya açıklama ara..." oninput="filterCards()">
+  </div>
+  <div class="filter-btns">
+    <button class="filter-btn active" onclick="filterCat('all', this)">Tümü</button>
+    <button class="filter-btn" onclick="filterCat('oncelik', this)">Öncelik</button>
+    <button class="filter-btn" onclick="filterCat('yasak', this)">Yasaklar</button>
+    <button class="filter-btn" onclick="filterCat('park', this)">Park</button>
+    <button class="filter-btn" onclick="filterCat('zorunlu', this)">Zorunlu</button>
+  </div>
+</div>
+
+<div class="grid" id="grid"></div>
+
+<div class="overlay" id="overlay" onclick="closeModal(event)">
+  <div class="modal" id="modal">
+    <button class="modal-close" onclick="closeModal(null, true)">✕</button>
+    <div id="modal-code" class="modal-code"></div>
+    <img id="modal-img" class="modal-img" src="" alt="" onerror="this.style.display='none'">
+    <div id="modal-tr" class="modal-tr"></div>
+    <div id="modal-gr" class="modal-gr"></div>
+    <div id="modal-desc" class="modal-desc"></div>
+  </div>
+</div>
+
+<footer>
+  Kaynak: <a href="https://www.glavopoulos.com/kok-p/" target="_blank">glavopoulos.com/kok-p</a> &nbsp;|&nbsp;
+  Görseller: Wikimedia Commons (CC) &nbsp;|&nbsp;
+  <a href="https://yunancaokulu.com">YunancaOkulu.com</a>
+</footer>
+
+<script>
+// ── Wikimedia Commons görselleri (Yunan trafik işaretleri, Creative Commons)
+// Görseller yoksa placeholder gösterilir
+const wikiBase = "https://upload.wikimedia.org/wikipedia/commons/thumb/";
+/** Bu sayfa pages/ içinde; kökteki assets/images (r1… dosya adları) */
+const assetImgDir = "../assets/images/";
+
+/**
+ * Yerel: r101, r1001, r1-1, r1_P-1a vb. → sonra Wikimedia.
+ * indexInSigns: signs dizisindeki 0 tabanlı sıra (dosya adı genelde bu sırayla eşleşir).
+ */
+function buildImageUrlCandidates(s, indexInSigns) {
+  var n = indexInSigns + 1;
+  var exts = [".webp", ".png", ".jpg", ".jpeg", ".svg"];
+  var codeSlug = String(s.code || "")
+    .replace(/α/g, "a")
+    .replace(/β/g, "b")
+    .replace(/[^\w\-]/g, "");
+  var tail = (s.img || "").split("/").pop() || "";
+  var commonsName = tail.replace(/^120px-/, "");
+
+  var names = [
+    "r1" + String(n).padStart(2, "0"),
+    "r1" + String(n).padStart(3, "0"),
+    "r1" + String(n).padStart(4, "0"),
+    "r1-" + n,
+    "r1_" + n,
+    "r1-" + s.code,
+    "r1_" + codeSlug,
+    "r1" + n
+  ];
+  if (commonsName) names.push(commonsName);
+
+  var seen = {};
+  var urls = [];
+  names.forEach(function (name) {
+    if (!name) return;
+    exts.forEach(function (ext) {
+      var u = assetImgDir + name + ext;
+      if (!seen[u]) {
+        seen[u] = 1;
+        urls.push(u);
+      }
+    });
+  });
+  urls.push(wikiBase + s.img);
+  return urls;
+}
+
+function loadImgWithFallback(imgEl, candidates, onFail) {
+  var i = 0;
+  function next() {
+    if (i >= candidates.length) {
+      if (typeof onFail === "function") onFail();
+      return;
+    }
+    var u = candidates[i++];
+    imgEl.onerror = next;
+    imgEl.onload = function () {
+      imgEl.onerror = null;
+      imgEl.onload = null;
+    };
+    imgEl.src = u;
+  }
+  next();
+}
+
+// Her işaret: kod, türkçe açıklama, yunanca kısa ad, kategori, wiki görsel path
+const signs = [
+  {
+    code:"P-1", cat:"oncelik",
+    tr:"Zorunlu öncelik ver (Yield)",
+    gr:"Υποχρεωτική παραχώρηση προτεραιότητας",
+    desc:"Bu işaret, önünüzdeki kavşakta diğer yoldan gelen araçlara öncelik verme zorunluluğu olduğunu belirtir.",
+    img:"e/e7/Zeichen_205.svg/120px-Zeichen_205.svg.png"
+  },
+  {
+    code:"P-2", cat:"oncelik",
+    tr:"Dur (STOP)",
+    gr:"Υποχρεωτική διακοπή πορείας",
+    desc:"Kavşak öncesinde araç, kesinlikle durmalı; hareket etmeden önce yolun emniyetli olduğundan emin olunmalıdır.",
+    img:"b/b3/Stop_sign.svg/120px-Stop_sign.svg.png"
+  },
+  {
+    code:"P-3", cat:"oncelik",
+    tr:"Öncelikli yol",
+    gr:"Οδός προτεραιότητας",
+    desc:"Bu yolda seyreden araçların, yan yollardan giren araçlara karşı önceliği vardır.",
+    img:"4/4c/Greek_road_sign_P-3.svg/120px-Greek_road_sign_P-3.svg.png"
+  },
+  {
+    code:"P-4", cat:"oncelik",
+    tr:"Öncelikli yol sonu",
+    gr:"Τέλος οδού προτεραιότητας",
+    desc:"Öncelikli yolun sona erdiğini gösterir. Bundan sonra normal öncelik kuralları geçerlidir.",
+    img:"7/72/Greek_road_sign_P-4.svg/120px-Greek_road_sign_P-4.svg.png"
+  },
+  {
+    code:"P-5", cat:"oncelik",
+    tr:"Karşı yönden gelen araçlara öncelik ver",
+    gr:"Προτεραιότητα αντιθέτως ερχόμενης κυκλοφορίας",
+    desc:"Yolun dar olması nedeniyle karşı yönden gelen araçlara öncelik verilmelidir.",
+    img:"8/8e/Greek_road_sign_P-5.svg/120px-Greek_road_sign_P-5.svg.png"
+  },
+  {
+    code:"P-6", cat:"oncelik",
+    tr:"Karşı yöne öncelik (dar yol, sen önceliklisin)",
+    gr:"Προτεραιότητα έναντι επερχόμενης κυκλοφορίας",
+    desc:"Dar yol nedeniyle bu işareti geçen araçın, karşı yöndeki araçlara karşı önceliği vardır.",
+    img:"d/d4/Greek_road_sign_P-6.svg/120px-Greek_road_sign_P-6.svg.png"
+  },
+  {
+    code:"P-7", cat:"yasak",
+    tr:"Tüm araçlar için giriş yasak",
+    gr:"Απαγορεύεται η είσοδος σε όλα τα οχήματα",
+    desc:"Hiçbir araç bu işaretin bulunduğu yola giremez.",
+    img:"f/f8/Zeichen_267.svg/120px-Zeichen_267.svg.png"
+  },
+  {
+    code:"P-8", cat:"yasak",
+    tr:"Her iki yönde de tüm araçlar için kapalı yol",
+    gr:"Κλειστή οδός για όλα τα οχήματα και προς τις δύο κατευθύνσεις",
+    desc:"Yol, her iki yönde de tüm araçlara kapalıdır.",
+    img:"9/9d/Greek_road_sign_P-8.svg/120px-Greek_road_sign_P-8.svg.png"
+  },
+  {
+    code:"P-9", cat:"yasak",
+    tr:"Çift tekerlekli motosikletler hariç motorlu araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε μηχανοκίνητα οχήματα",
+    desc:"İki tekerlekli motosikletler dışındaki motorlu araçların girişi yasaktır.",
+    img:"a/a3/Greek_road_sign_P-9.svg/120px-Greek_road_sign_P-9.svg.png"
+  },
+  {
+    code:"P-10", cat:"yasak",
+    tr:"Motosiklet girişi yasak",
+    gr:"Απαγορεύεται η είσοδος στις μοτοσυκλέτες",
+    desc:"Motosikletlerin bu yola girişi kesinlikle yasaktır.",
+    img:"e/e5/Greek_road_sign_P-10.svg/120px-Greek_road_sign_P-10.svg.png"
+  },
+  {
+    code:"P-11", cat:"yasak",
+    tr:"Bisiklet girişi yasak",
+    gr:"Απαγορεύεται η είσοδος στα ποδήλατα",
+    desc:"Bisikletlerin bu yola girişi yasaktır.",
+    img:"3/3a/Greek_road_sign_P-11.svg/120px-Greek_road_sign_P-11.svg.png"
+  },
+  {
+    code:"P-12", cat:"yasak",
+    tr:"Moped (motopedal) girişi yasak",
+    gr:"Απαγορεύεται η είσοδος στα μοτοποδήλατα",
+    desc:"Mopedlerin (motopedallı araçların) bu yola girişi yasaktır.",
+    img:"c/c3/Greek_road_sign_P-12.svg/120px-Greek_road_sign_P-12.svg.png"
+  },
+  {
+    code:"P-13", cat:"yasak",
+    tr:"Motosiklet ve otomobil girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε μηχανοκίνητα οχήματα",
+    desc:"Hem otomobil hem de motosikletlerin girişi yasaktır.",
+    img:"1/19/Greek_road_sign_P-13.svg/120px-Greek_road_sign_P-13.svg.png"
+  },
+  {
+    code:"P-14", cat:"yasak",
+    tr:"Römork çeken araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε μηχανοκίνητο όχημα που σύρει ρυμουλκούμενο",
+    desc:"Tek dingilli römork veya yarı-römork hariç, römork çeken motorlu araçların girişi yasaktır.",
+    img:"c/c8/Greek_road_sign_P-14.svg/120px-Greek_road_sign_P-14.svg.png"
+  },
+  {
+    code:"P-15", cat:"yasak",
+    tr:"Yaya girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε πεζούς",
+    desc:"Bu yola yayaların girişi yasaktır.",
+    img:"d/d3/Zeichen_259.svg/120px-Zeichen_259.svg.png"
+  },
+  {
+    code:"P-16", cat:"yasak",
+    tr:"Hayvan arabası girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε ζωήλατα οχήματα",
+    desc:"Hayvan tarafından çekilen taşıtların girişi yasaktır.",
+    img:"f/fe/Greek_road_sign_P-16.svg/120px-Greek_road_sign_P-16.svg.png"
+  },
+  {
+    code:"P-17", cat:"yasak",
+    tr:"El arabası girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε χειράμαξες",
+    desc:"Elle itilen araçların (el arabası vb.) girişi yasaktır.",
+    img:"4/44/Greek_road_sign_P-17.svg/120px-Greek_road_sign_P-17.svg.png"
+  },
+  {
+    code:"P-18", cat:"yasak",
+    tr:"Tarım makinesi girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε αγροτικά μηχανήματα",
+    desc:"Traktörler ve tarım makinelerinin bu yola girişi yasaktır.",
+    img:"b/b5/Greek_road_sign_P-18.svg/120px-Greek_road_sign_P-18.svg.png"
+  },
+  {
+    code:"P-19", cat:"yasak",
+    tr:"Motorlu araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε μηχανοκίνητα οχήματα",
+    desc:"Tüm motorlu araçların bu yola girişi yasaktır.",
+    img:"1/1a/Greek_road_sign_P-19.svg/120px-Greek_road_sign_P-19.svg.png"
+  },
+  {
+    code:"P-20", cat:"yasak",
+    tr:"Belirli kategorilerdeki araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα ορισμένων κατηγοριών",
+    desc:"İşarette belirtilen kategorilerdeki araçların (örn. motorlu ve hayvan arabaları) girişi yasaktır.",
+    img:"e/ec/Greek_road_sign_P-20.svg/120px-Greek_road_sign_P-20.svg.png"
+  },
+  {
+    code:"P-21", cat:"yasak",
+    tr:"Genişliği (ör. 2 m) aşan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα πλάτους που υπερβαίνει τα μέτρα",
+    desc:"Toplam genişliği işarette belirtilen metreyi (örn. 2 m) aşan araçların girişi yasaktır.",
+    img:"9/9c/Greek_road_sign_P-21.svg/120px-Greek_road_sign_P-21.svg.png"
+  },
+  {
+    code:"P-22", cat:"yasak",
+    tr:"Yüksekliği (ör. 3,5 m) aşan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα ύψους που υπερβαίνει τα μέτρα",
+    desc:"Toplam yüksekliği işarette belirtilen metreyi (örn. 3,5 m) aşan araçların girişi yasaktır.",
+    img:"7/78/Greek_road_sign_P-22.svg/120px-Greek_road_sign_P-22.svg.png"
+  },
+  {
+    code:"P-23", cat:"yasak",
+    tr:"Ağırlığı (ör. 5 ton) aşan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα βάρους που υπερβαίνει τους τόννους",
+    desc:"Toplam ağırlığı işarette belirtilen tonu (örn. 5 ton) aşan araçların girişi yasaktır.",
+    img:"4/43/Greek_road_sign_P-23.svg/120px-Greek_road_sign_P-23.svg.png"
+  },
+  {
+    code:"P-24", cat:"yasak",
+    tr:"Dingil ağırlığı (ör. 2 ton) aşan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα βάρους ανά άξονα που υπερβαίνει τους τόννους",
+    desc:"Dingil başına ağırlığı işarette belirtilen tonu (örn. 2 ton) aşan araçların girişi yasaktır.",
+    img:"c/cb/Greek_road_sign_P-24.svg/120px-Greek_road_sign_P-24.svg.png"
+  },
+  {
+    code:"P-25", cat:"yasak",
+    tr:"Uzunluğu (ör. 10 m) aşan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα μήκους που υπερβαίνει τα μέτρα",
+    desc:"Toplam uzunluğu işarette belirtilen metreyi (örn. 10 m) aşan araç veya araç kombinasyonunun girişi yasaktır.",
+    img:"a/a7/Greek_road_sign_P-25.svg/120px-Greek_road_sign_P-25.svg.png"
+  },
+  {
+    code:"P-26", cat:"yasak",
+    tr:"Güvenli takip mesafesi zorunlu (ör. 70 m)",
+    gr:"Απαγορεύεται η οδήγηση σε απόσταση μικρότερη των μέτρων",
+    desc:"Önünüzdeki araçla işarette belirtilen mesafeden (örn. 70 m) daha yakın sürüş yasaktır.",
+    img:"5/56/Greek_road_sign_P-26.svg/120px-Greek_road_sign_P-26.svg.png"
+  },
+  {
+    code:"P-27", cat:"yasak",
+    tr:"Sola dönüş yasak",
+    gr:"Απαγορεύεται η αριστερή στροφή",
+    desc:"Bu işaretin bulunduğu yerde sola dönüş kesinlikle yasaktır.",
+    img:"e/e1/Zeichen_209-10.svg/120px-Zeichen_209-10.svg.png"
+  },
+  {
+    code:"P-28", cat:"yasak",
+    tr:"Sağa dönüş yasak",
+    gr:"Απαγορεύεται η δεξιά στροφή",
+    desc:"Bu işaretin bulunduğu yerde sağa dönüş kesinlikle yasaktır.",
+    img:"8/84/Zeichen_209-20.svg/120px-Zeichen_209-20.svg.png"
+  },
+  {
+    code:"P-29", cat:"yasak",
+    tr:"U dönüşü yasak",
+    gr:"Απαγορεύεται η αναστροφή",
+    desc:"180 derecelik dönüş (U dönüşü) bu yerde yasaktır.",
+    img:"1/15/Zeichen_207.svg/120px-Zeichen_207.svg.png"
+  },
+  {
+    code:"P-30", cat:"yasak",
+    tr:"Geçme yasak (yan sepetsiz motosikletler hariç)",
+    gr:"Απαγορεύεται το προσπέρασμα",
+    desc:"Motorlu araçlar, yan sepetsiz çift tekerlekli motosikletler hariç diğer araçları geçemez.",
+    img:"3/30/Zeichen_276.svg/120px-Zeichen_276.svg.png"
+  },
+  {
+    code:"P-31", cat:"yasak",
+    tr:"Kamyon geçme yasak (3,5 ton üzeri)",
+    gr:"Απαγορεύεται στους οδηγούς φορτηγών να προσπερνούν",
+    desc:"İzin verilen azami ağırlığı 3,5 tonu aşan kamyonlar diğer araçları geçemez.",
+    img:"6/69/Zeichen_277.svg/120px-Zeichen_277.svg.png"
+  },
+  {
+    code:"P-32", cat:"yasak",
+    tr:"Azami hız sınırı (ör. 50 km/s)",
+    gr:"Η μέγιστη ταχύτητα περιορίζεται στον αναγραφόμενο αριθμό",
+    desc:"Araçlar, işarette belirtilen hızı (örn. 50 km/s) aşamaz.",
+    img:"6/63/Zeichen_274-50.svg/120px-Zeichen_274-50.svg.png"
+  },
+  {
+    code:"P-33", cat:"yasak",
+    tr:"Ses sinyali kullanımı yasak",
+    gr:"Απαγορεύεται η χρήση ηχητικών οργάνων",
+    desc:"Kaza riski dışında korna ve benzeri ses sinyallerinin kullanımı yasaktır.",
+    img:"2/25/Zeichen_283.svg/120px-Zeichen_283.svg.png"
+  },
+  {
+    code:"P-34", cat:"yasak",
+    tr:"Gümrük duraksız geçiş yasak",
+    gr:"Απαγορεύεται η διέλευση χωρίς στάση προ του τελωνίου",
+    desc:"Gümrük noktasından duraksız geçiş yasaktır; araçlar durmak zorundadır.",
+    img:"d/d3/Greek_road_sign_P-34.svg/120px-Greek_road_sign_P-34.svg.png"
+  },
+  {
+    code:"P-35", cat:"yasak",
+    tr:"Otoyol gişesi duraksız geçiş yasak",
+    gr:"Απαγορεύεται η διέλευση χωρίς στάση προ σταθμού διοδίων",
+    desc:"Otoyol gişelerinden duraksız geçiş yasaktır.",
+    img:"0/07/Greek_road_sign_P-35.svg/120px-Greek_road_sign_P-35.svg.png"
+  },
+  {
+    code:"P-35α", cat:"zorunlu",
+    tr:"Elektrikli araç şarj noktası",
+    gr:"Θέση επαναφόρτισης ηλεκτροκίνητων οχημάτων",
+    desc:"Bu nokta, elektrikli araçlar için şarj istasyonunu gösterir.",
+    img:"1/1e/Greek_road_sign_P-35a.svg/120px-Greek_road_sign_P-35a.svg.png"
+  },
+  {
+    code:"P-36", cat:"yasak",
+    tr:"Tüm yerel yasaklar sona erdi",
+    gr:"Τέλος όλων των τοπικών απαγορεύσεων",
+    desc:"Hareketli araçlara daha önce uygulanmış tüm yerel yasaklar bu noktadan itibaren sona erer.",
+    img:"7/71/Zeichen_282.svg/120px-Zeichen_282.svg.png"
+  },
+  {
+    code:"P-37", cat:"yasak",
+    tr:"Hız sınırı sona erdi (ör. 40 km/s)",
+    gr:"Τέλος ορίου ταχύτητας",
+    desc:"Daha önce işaretle uygulanmış hız sınırı (örn. 40 km/s) bu noktadan itibaren sona erer.",
+    img:"c/cc/Zeichen_278-40.svg/120px-Zeichen_278-40.svg.png"
+  },
+  {
+    code:"P-38", cat:"yasak",
+    tr:"Geçme yasağı sona erdi",
+    gr:"Τέλος απαγόρευσης προσπεράσματος",
+    desc:"Daha önce işaretle uygulanmış geçme yasağı bu noktadan itibaren sona erer.",
+    img:"6/6c/Zeichen_280.svg/120px-Zeichen_280.svg.png"
+  },
+  {
+    code:"P-39", cat:"park",
+    tr:"Park yasak",
+    gr:"Απαγορεύεται η στάθμευση",
+    desc:"İşaretin bulunduğu yandan, sonraki yol kavşağına kadar park yasaktır.",
+    img:"8/84/Zeichen_286.svg/120px-Zeichen_286.svg.png"
+  },
+  {
+    code:"P-40", cat:"park",
+    tr:"Durmak ve park etmek yasak",
+    gr:"Απαγορεύεται η στάση και η στάθμευση",
+    desc:"İşaretin bulunduğu yandan, sonraki yol kavşağına kadar durmak ve park etmek yasaktır.",
+    img:"b/b4/Zeichen_283.svg/120px-Zeichen_283.svg.png"
+  },
+  {
+    code:"P-41", cat:"park",
+    tr:"Tek aylarda işaret tarafında park yasak",
+    gr:"Απαγορεύεται η στάθμευση τους μονούς μήνες",
+    desc:"Tek numaralı aylarda (Ocak, Mart...) işaretin bulunduğu tarafta park etmek yasaktır.",
+    img:"3/3c/Greek_road_sign_P-41.svg/120px-Greek_road_sign_P-41.svg.png"
+  },
+  {
+    code:"P-42", cat:"park",
+    tr:"Çift aylarda işaret tarafında park yasak",
+    gr:"Απαγορεύεται η στάθμευση τους ζυγούς μήνες",
+    desc:"Çift numaralı aylarda (Şubat, Nisan...) işaretin bulunduğu tarafta park etmek yasaktır.",
+    img:"f/f7/Greek_road_sign_P-42.svg/120px-Greek_road_sign_P-42.svg.png"
+  },
+  {
+    code:"P-43", cat:"park",
+    tr:"Sınırlı süreli park bölgesi başlangıcı",
+    gr:"Περιοχή απαγόρευσης στάθμευσης",
+    desc:"Park yeri sınırlı sürelidir; disk veya bilet zorunlu olabilir.",
+    img:"a/a1/Greek_road_sign_P-43.svg/120px-Greek_road_sign_P-43.svg.png"
+  },
+  {
+    code:"P-44", cat:"park",
+    tr:"Sınırlı süreli park bölgesi sonu",
+    gr:"Έξοδος από περιοχή απαγορευμένης στάθμευσης",
+    desc:"Park kısıtlama bölgesinden çıkışı gösterir.",
+    img:"e/e0/Greek_road_sign_P-44.svg/120px-Greek_road_sign_P-44.svg.png"
+  },
+  {
+    code:"P-45", cat:"yasak",
+    tr:"Patlayıcı veya yanıcı madde taşıyan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα που μεταφέρουν εκρηκτικές ή εύφλεκτες ύλες",
+    desc:"Belirli miktarın üzerinde patlayıcı veya yanıcı madde taşıyan araçların girişi yasaktır.",
+    img:"5/5e/Greek_road_sign_P-45.svg/120px-Greek_road_sign_P-45.svg.png"
+  },
+  {
+    code:"P-46", cat:"yasak",
+    tr:"Su kirliliğine neden olabilecek madde taşıyan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα που μεταφέρουν ύλες που μπορούν να μολύνουν ύδατα",
+    desc:"Su kirliliğine yol açabilecek madde taşıyan araçların girişi yasaktır.",
+    img:"d/d3/Greek_road_sign_P-46.svg/120px-Greek_road_sign_P-46.svg.png"
+  },
+  {
+    code:"P-47", cat:"zorunlu",
+    tr:"Zorunlu sola dön",
+    gr:"Υποχρεωτική κατεύθυνση πορείας προς τα αριστερά",
+    desc:"Araçlar bu noktada sola dönmek zorundadır.",
+    img:"3/38/Zeichen_211.svg/120px-Zeichen_211.svg.png"
+  },
+  {
+    code:"P-48", cat:"zorunlu",
+    tr:"Zorunlu sağa dön",
+    gr:"Υποχρεωτική κατεύθυνση πορείας προς τα δεξιά",
+    desc:"Araçlar bu noktada sağa dönmek zorundadır.",
+    img:"9/9e/Zeichen_211-10.svg/120px-Zeichen_211-10.svg.png"
+  },
+  {
+    code:"P-49", cat:"zorunlu",
+    tr:"Zorunlu düz git",
+    gr:"Υποχρεωτική κατεύθυνση πορείας προς τα εμπρός",
+    desc:"Araçlar bu noktada düz devam etmek zorundadır.",
+    img:"1/15/Zeichen_209.svg/120px-Zeichen_209.svg.png"
+  },
+  {
+    code:"P-50", cat:"zorunlu",
+    tr:"Zorunlu sola veya sağa dön",
+    gr:"Υποχρεωτική κατεύθυνση πορείας αριστερά ή δεξιά",
+    desc:"Araçlar sola ya da sağa dönebilir, ancak düz devam edemez.",
+    img:"d/df/Greek_road_sign_P-50.svg/120px-Greek_road_sign_P-50.svg.png"
+  },
+  {
+    code:"P-50α", cat:"zorunlu",
+    tr:"Zorunlu sola dön (kavşak öncesi)",
+    gr:"Υποχρεωτική κατεύθυνση πορείας αριστερά",
+    desc:"Araçlar kavşak öncesinde sola dönmek zorundadır.",
+    img:"5/59/Greek_road_sign_P-50a.svg/120px-Greek_road_sign_P-50a.svg.png"
+  },
+  {
+    code:"P-50δ", cat:"zorunlu",
+    tr:"Zorunlu sağa dön (kavşak öncesi)",
+    gr:"Υποχρεωτική κατεύθυνση πορείας δεξιά",
+    desc:"Araçlar kavşak öncesinde sağa dönmek zorundadır.",
+    img:"e/e9/Greek_road_sign_P-50d.svg/120px-Greek_road_sign_P-50d.svg.png"
+  },
+  {
+    code:"P-51α", cat:"zorunlu",
+    tr:"Zorunlu düz veya sola",
+    gr:"Υποχρεωτική κατεύθυνση πορείας εμπρός ή αριστερά",
+    desc:"Araçlar düz devam edebilir ya da sola dönebilir.",
+    img:"6/6d/Greek_road_sign_P-51a.svg/120px-Greek_road_sign_P-51a.svg.png"
+  },
+  {
+    code:"P-51δ", cat:"zorunlu",
+    tr:"Zorunlu düz veya sağa",
+    gr:"Υποχρεωτική κατεύθυνση πορείας εμπρός ή δεξιά",
+    desc:"Araçlar düz devam edebilir ya da sağa dönebilir.",
+    img:"2/2b/Greek_road_sign_P-51d.svg/120px-Greek_road_sign_P-51d.svg.png"
+  },
+  {
+    code:"P-52", cat:"zorunlu",
+    tr:"Refüjün sağından veya solundan geçilebilir",
+    gr:"Υποχρεωτική διέλευση από δεξιά ή αριστερά νησίδος",
+    desc:"Araçlar bölücü adacığın ya sağından ya da solundan geçebilir.",
+    img:"1/17/Greek_road_sign_P-52.svg/120px-Greek_road_sign_P-52.svg.png"
+  },
+  {
+    code:"P-52α", cat:"zorunlu",
+    tr:"Zorunlu olarak refüjün solundan geçilir",
+    gr:"Υποχρεωτική διέλευση μόνο από αριστερή πλευρά νησίδος",
+    desc:"Araçlar bölücü adacığın yalnızca solundan geçmek zorundadır.",
+    img:"6/60/Greek_road_sign_P-52a.svg/120px-Greek_road_sign_P-52a.svg.png"
+  },
+  {
+    code:"P-52δ", cat:"zorunlu",
+    tr:"Zorunlu olarak refüjün sağından geçilir",
+    gr:"Υποχρεωτική διέλευση μόνο από δεξιά πλευρά νησίδος",
+    desc:"Araçlar bölücü adacığın yalnızca sağından geçmek zorundadır.",
+    img:"e/e8/Greek_road_sign_P-52d.svg/120px-Greek_road_sign_P-52d.svg.png"
+  },
+  {
+    code:"P-53", cat:"zorunlu",
+    tr:"Zorunlu döner kavşak",
+    gr:"Κυκλική υποχρεωτική διαδρομή",
+    desc:"Döner kavşakta araçlar saat yönünün tersinde ilerlemek zorundadır.",
+    img:"b/bd/Zeichen_215.svg/120px-Zeichen_215.svg.png"
+  },
+  {
+    code:"P-54", cat:"zorunlu",
+    tr:"Zorunlu bisiklet yolu",
+    gr:"Οδός υποχρεωτικής διέλευσης ποδηλάτων",
+    desc:"Bu yol yalnızca bisikletlere ayrılmıştır; diğer araçların girişi yasaktır.",
+    img:"3/35/Zeichen_237.svg/120px-Zeichen_237.svg.png"
+  },
+  {
+    code:"P-55", cat:"zorunlu",
+    tr:"Zorunlu yaya yolu (pedestrian)",
+    gr:"Οδός υποχρεωτικής διέλευσης πεζών",
+    desc:"Bu yol yalnızca yayalara ayrılmıştır. Acil araçlar ve parselden çıkış için istisnai geçiş yapılabilir.",
+    img:"0/0d/Zeichen_239.svg/120px-Zeichen_239.svg.png"
+  },
+  {
+    code:"P-56", cat:"zorunlu",
+    tr:"Zorunlu atlı yol",
+    gr:"Οδός υποχρεωτικής διέλευσης εφίππων",
+    desc:"Bu yol yalnızca atlılara ayrılmıştır.",
+    img:"b/bf/Greek_road_sign_P-56.svg/120px-Greek_road_sign_P-56.svg.png"
+  },
+  {
+    code:"P-57", cat:"zorunlu",
+    tr:"Zorunlu asgari hız (ör. 30 km/s)",
+    gr:"Υποχρεωτική ελάχιστη ταχύτητα",
+    desc:"Bu yolda araçlar en az işarette belirtilen hızda (örn. 30 km/s) ilerlemelidir.",
+    img:"9/99/Zeichen_275-30.svg/120px-Zeichen_275-30.svg.png"
+  },
+  {
+    code:"P-58", cat:"zorunlu",
+    tr:"Zorunlu asgari hız sona erdi",
+    gr:"Τέλος υποχρεωτικής ελάχιστης ταχύτητας",
+    desc:"P-57 işaretiyle uygulanmış zorunlu asgari hız bu noktadan itibaren sona erer.",
+    img:"a/a8/Zeichen_279-30.svg/120px-Zeichen_279-30.svg.png"
+  },
+  {
+    code:"P-59", cat:"zorunlu",
+    tr:"Zorunlu kar zinciri",
+    gr:"Υποχρεωτικές αντιολισθητικές αλυσίδες χιόνων",
+    desc:"Araçların en az iki tahrik tekerleğine kar zinciri takılması zorunludur.",
+    img:"b/bc/Zeichen_268.svg/120px-Zeichen_268.svg.png"
+  },
+  {
+    code:"P-60", cat:"yasak",
+    tr:"Bölgesel azami hız sınırı başlangıcı",
+    gr:"Ανώτατη ταχύτητα περιοχής",
+    desc:"İşarette belirtilen hız sınırı tüm bölge için geçerlidir.",
+    img:"b/b4/Greek_road_sign_P-60.svg/120px-Greek_road_sign_P-60.svg.png"
+  },
+  {
+    code:"P-61", cat:"yasak",
+    tr:"Bölgesel azami hız sınırı sonu",
+    gr:"Έξοδος από περιοχή με ανώτατο όριο ταχύτητας",
+    desc:"Bölgesel hız sınırı bölgesinden çıkışı gösterir.",
+    img:"c/c3/Greek_road_sign_P-61.svg/120px-Greek_road_sign_P-61.svg.png"
+  },
+  {
+    code:"P-62", cat:"yasak",
+    tr:"Kamyon geçme yasağı sona erdi",
+    gr:"Τέλος απαγόρευσης προσπεράσματος από φορτηγά",
+    desc:"P-31 ile uygulanmış kamyon geçme yasağı bu noktadan itibaren sona erer.",
+    img:"b/be/Zeichen_281.svg/120px-Zeichen_281.svg.png"
+  },
+  {
+    code:"P-63", cat:"yasak",
+    tr:"Römork ağırlık sınırı (ör. 3 ton)",
+    gr:"Απαγορεύεται το ρυμουλκούμενο να έχει βάρος μεγαλύτερο",
+    desc:"Çekilen römorkun ağırlığı işarette belirtilen tonu (örn. 3 ton) aşamaz.",
+    img:"7/76/Greek_road_sign_P-63.svg/120px-Greek_road_sign_P-63.svg.png"
+  },
+  {
+    code:"P-64", cat:"yasak",
+    tr:"Tehlikeli madde taşıyan araç girişi yasak",
+    gr:"Απαγορεύεται η είσοδος σε οχήματα που μεταφέρουν επικίνδυνα υλικά",
+    desc:"Tehlikeli madde taşıyan araçların bu yola girişi kesinlikle yasaktır.",
+    img:"9/9e/Greek_road_sign_P-64.svg/120px-Greek_road_sign_P-64.svg.png"
+  },
+  {
+    code:"P-65", cat:"zorunlu",
+    tr:"Kategori başına özel şerit zorunluluğu",
+    gr:"Κάθε κατηγορία χρηστών πρέπει να χρησιμοποιεί τον αντίστοιχο διάδρομο",
+    desc:"Her kullanıcı kategorisi, işarette kendisine ayrılmış şeridi kullanmak zorundadır.",
+    img:"5/5a/Greek_road_sign_P-65.svg/120px-Greek_road_sign_P-65.svg.png"
+  },
+  {
+    code:"P-66", cat:"zorunlu",
+    tr:"Paylaşımlı özel şerit",
+    gr:"Οι διάφορες κατηγορίες χρηστών επιτρέπεται να χρησιμοποιούν ταυτόχρονα τον ειδικό διάδρομο",
+    desc:"İşarette gösterilen farklı kategoriler aynı şeridi birlikte kullanabilir.",
+    img:"0/0b/Greek_road_sign_P-66.svg/120px-Greek_road_sign_P-66.svg.png"
+  },
+  {
+    code:"P-66α", cat:"zorunlu",
+    tr:"Karma kullanım yolu (araç + bisiklet)",
+    gr:"Οδός μεικτής χρήσης από οχήματα και ποδήλατα",
+    desc:"Bu yol hem motorlu araçlar hem de bisikletler tarafından kullanılabilir.",
+    img:"9/99/Greek_road_sign_P-66a.svg/120px-Greek_road_sign_P-66a.svg.png"
+  },
+  {
+    code:"P-67", cat:"zorunlu",
+    tr:"Yalnızca otobüs ve troleybüs şeridi",
+    gr:"Αποκλειστική διέλευση λεωφορείων ή τρόλεϊ",
+    desc:"Bu şerit yalnızca otobüs ve troleybüslere ayrılmıştır.",
+    img:"d/d0/Greek_road_sign_P-67.svg/120px-Greek_road_sign_P-67.svg.png"
+  },
+  {
+    code:"P-67α", cat:"zorunlu",
+    tr:"Yalnızca otobüs, troleybüs ve bisiklet şeridi",
+    gr:"Αποκλειστική διέλευση λεωφορείων, τρόλεϊ και ποδηλάτων",
+    desc:"Bu şerit otobüs, troleybüs ve bisikletlere ayrılmıştır.",
+    img:"a/a6/Greek_road_sign_P-67a.svg/120px-Greek_road_sign_P-67a.svg.png"
+  },
+  {
+    code:"P-68", cat:"zorunlu",
+    tr:"Otobüs/Troleybüs şeridi sona erdi",
+    gr:"Τέλος αποκλειστικής διέλευσης λεωφορείων ή τρόλεϊ",
+    desc:"Otobüs ve troleybüse özel şerit bu noktadan itibaren sona erer.",
+    img:"2/27/Greek_road_sign_P-68.svg/120px-Greek_road_sign_P-68.svg.png"
+  },
+  {
+    code:"P-68α", cat:"zorunlu",
+    tr:"Otobüs, troleybüs ve bisiklet şeridi sona erdi",
+    gr:"Τέλος αποκλειστικής διέλευσης λεωφορείων, τρόλεϊ και ποδηλάτων",
+    desc:"Otobüs, troleybüs ve bisiklete özel şerit bu noktadan itibaren sona erer.",
+    img:"c/c4/Greek_road_sign_P-68a.svg/120px-Greek_road_sign_P-68a.svg.png"
+  },
+  {
+    code:"P-69", cat:"park",
+    tr:"Kartlı park yeri",
+    gr:"Χώρος στάθμευσης με κάρτα",
+    desc:"Park yeri yalnızca park kartı veya bilet ile kullanılabilir.",
+    img:"6/60/Greek_road_sign_P-69.svg/120px-Greek_road_sign_P-69.svg.png"
+  },
+  {
+    code:"P-70", cat:"park",
+    tr:"Belirli araç kategorisi park yeri (ör. TAKSİ)",
+    gr:"Χώρος στάθμευσης ορισμένης κατηγορίας",
+    desc:"Bu park yeri yalnızca işarette belirtilen araç kategorisi için ayrılmıştır (örn. TAXI).",
+    img:"8/87/Greek_road_sign_P-70.svg/120px-Greek_road_sign_P-70.svg.png"
+  },
+  {
+    code:"P-71", cat:"park",
+    tr:"Engelli park yeri (özel izin gerekli)",
+    gr:"Χώρος στάθμευσης αποκλειστικά για οχήματα ατόμων με μειωμένη κινητικότητα",
+    desc:"Bu park yeri yalnızca özel izinli engelli araçlarına ayrılmıştır.",
+    img:"e/ec/Zeichen_314-50.svg/120px-Zeichen_314-50.svg.png"
+  },
+  {
+    code:"P-72", cat:"park",
+    tr:"Belirli engelli aracına özel park yeri",
+    gr:"Χώρος στάθμευσης αποκλειστικά για συγκεκριμένο όχημα ατόμων με μειωμένη κινητικότητα",
+    desc:"Bu park yeri plakayla belirlenen belirli bir engelli aracına özeldir.",
+    img:"6/62/Greek_road_sign_P-72.svg/120px-Greek_road_sign_P-72.svg.png"
+  },
+  {
+    code:"P-73α", cat:"zorunlu",
+    tr:"Tehlikeli madde taşıyan araç: zorunlu sola dön",
+    gr:"Υποχρεωτική κατεύθυνση πορείας επικίνδυνων φορτίων προς αριστερά",
+    desc:"Tehlikeli madde taşıyan araçlar bu noktada sola dönmek zorundadır.",
+    img:"c/c1/Greek_road_sign_P-73a.svg/120px-Greek_road_sign_P-73a.svg.png"
+  },
+  {
+    code:"P-73δ", cat:"zorunlu",
+    tr:"Tehlikeli madde taşıyan araç: zorunlu sağa dön",
+    gr:"Υποχρεωτική κατεύθυνση πορείας επικίνδυνων φορτίων προς δεξιά",
+    desc:"Tehlikeli madde taşıyan araçlar bu noktada sağa dönmek zorundadır.",
+    img:"2/2e/Greek_road_sign_P-73d.svg/120px-Greek_road_sign_P-73d.svg.png"
+  },
+  {
+    code:"P-74α", cat:"zorunlu",
+    tr:"Tehlikeli madde taşıyan araç: sola zorunlu güzergah",
+    gr:"Υποχρεωτική κατεύθυνση πορείας επικίνδυνων φορτίων",
+    desc:"Tehlikeli madde taşıyan araçlar için zorunlu sol güzergah.",
+    img:"4/45/Greek_road_sign_P-74a.svg/120px-Greek_road_sign_P-74a.svg.png"
+  },
+  {
+    code:"P-74δ", cat:"zorunlu",
+    tr:"Tehlikeli madde taşıyan araç: sağa zorunlu güzergah",
+    gr:"Υποχρεωτική κατεύθυνση πορείας επικίνδυνων φορτίων",
+    desc:"Tehlikeli madde taşıyan araçlar için zorunlu sağ güzergah.",
+    img:"e/e7/Greek_road_sign_P-74d.svg/120px-Greek_road_sign_P-74d.svg.png"
+  },
+  {
+    code:"P-75", cat:"zorunlu",
+    tr:"Su kirliliğine neden olabilecek madde taşıyan araç: dikkat",
+    gr:"Ιδιαίτερη προσοχή σε οχήματα που μεταφέρουν επικίνδυνες ύλες",
+    desc:"Su kirliliğine yol açabilecek tehlikeli madde taşıyan araçlar için özel dikkat zorunludur.",
+    img:"b/b7/Greek_road_sign_P-75.svg/120px-Greek_road_sign_P-75.svg.png"
+  },
+  {
+    code:"P-76", cat:"zorunlu",
+    tr:"Yalnızca tramvay şeridi",
+    gr:"Αποκλειστική διέλευση τροχιοδρόμου",
+    desc:"Bu şerit yalnızca tramvay kullanımına ayrılmıştır.",
+    img:"9/92/Greek_road_sign_P-76.svg/120px-Greek_road_sign_P-76.svg.png"
+  },
+  {
+    code:"P-77", cat:"zorunlu",
+    tr:"Tramvay şeridi sona erdi",
+    gr:"Τέλος αποκλειστικής διέλευσης τροχιοδρόμου",
+    desc:"Tramvaya özel şerit bu noktadan itibaren sona erer.",
+    img:"5/5d/Greek_road_sign_P-77.svg/120px-Greek_road_sign_P-77.svg.png"
+  }
+];
+
+let currentCat = 'all';
+
+function buildCards() {
+  const grid = document.getElementById('grid');
+  grid.innerHTML = '';
+  const q = document.getElementById('search').value.toLowerCase();
+  let count = 0;
+
+  signs.forEach((s, i) => {
+    const matchCat = currentCat === 'all' || s.cat === currentCat;
+    const matchQ = !q || s.code.toLowerCase().includes(q) || s.tr.toLowerCase().includes(q) || s.gr.toLowerCase().includes(q);
+    if (!matchCat || !matchQ) return;
+
+    const card = document.createElement('div');
+    card.className = 'card';
+    card.style.animationDelay = (count * 0.03) + 's';
+    card.onclick = () => openModal(i);
+
+    var candidates = buildImageUrlCandidates(s, i);
+    card.innerHTML = `
+      <div class="card-code">${s.code}</div>
+      <img class="card-img" src="" alt="${s.code}">
+      <div class="card-tr">${s.tr}</div>
+      <div class="card-gr">${truncate(s.gr, 60)}</div>
+    `;
+    var cimg = card.querySelector(".card-img");
+    loadImgWithFallback(cimg, candidates, function () {
+      cimg.outerHTML =
+        "<div class='card-img-placeholder'>" + s.code + "<br>görsel yok</div>";
+    });
+    grid.appendChild(card);
+    count++;
+  });
+
+  if (count === 0) {
+    grid.innerHTML = '<div class="empty">Sonuç bulunamadı.</div>';
+  }
+}
+
+function truncate(str, n) {
+  return str.length > n ? str.slice(0, n) + '…' : str;
+}
+
+function filterCards() { buildCards(); }
+
+function filterCat(cat, btn) {
+  currentCat = cat;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  buildCards();
+}
+
+function openModal(idx) {
+  const s = signs[idx];
+  document.getElementById('modal-code').textContent = s.code;
+  const imgEl = document.getElementById('modal-img');
+  imgEl.style.display = 'block';
+  var candidates = buildImageUrlCandidates(s, idx);
+  loadImgWithFallback(imgEl, candidates, function () {
+    imgEl.style.display = 'none';
+  });
+  document.getElementById('modal-tr').textContent = s.tr;
+  document.getElementById('modal-gr').textContent = s.gr;
+  document.getElementById('modal-desc').textContent = s.desc;
+  document.getElementById('overlay').classList.add('open');
+}
+
+function closeModal(e, force) {
+  if (force || e.target === document.getElementById('overlay')) {
+    document.getElementById('overlay').classList.remove('open');
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(null, true); });
+
+buildCards();
+</script>
+</body>
+</html>
