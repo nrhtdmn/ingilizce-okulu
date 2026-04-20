@@ -6,7 +6,7 @@ window.TEACHER_PUBLIC_PRACTICES_LIST = [];
 window.dbTrafficStats = {};
 
 try {
-  const firebaseConfig = {
+  const yunancaFirebaseConfig = {
     apiKey: "AIzaSyBD0BwWNj1ypc2oMk_ZndkwlqUsimC8Y4E",
     authDomain: "yunancaokuyucu.firebaseapp.com",
     projectId: "yunancaokuyucu",
@@ -14,8 +14,25 @@ try {
     messagingSenderId: "434539375134",
     appId: "1:434539375134:web:2538e78f0d15489c26dc0f"
   };
-  
-  if(firebaseConfig.apiKey && firebaseConfig.projectId && !firebaseConfig.projectId.includes("YOUR_PROJECT")) {
+
+  const hasCustomFirebase =
+    typeof window.APP_FIREBASE_CONFIG === "object" &&
+    window.APP_FIREBASE_CONFIG &&
+    window.APP_FIREBASE_CONFIG.apiKey &&
+    window.APP_FIREBASE_CONFIG.projectId &&
+    !String(window.APP_FIREBASE_CONFIG.projectId).includes("YOUR_PROJECT");
+
+  /** İngilizce sayfası: APP_REQUIRE_CUSTOM_FIREBASE true iken Yunanca projesine düşme */
+  let firebaseConfig = null;
+  if (hasCustomFirebase) {
+    firebaseConfig = window.APP_FIREBASE_CONFIG;
+  } else if (typeof window.APP_REQUIRE_CUSTOM_FIREBASE !== "undefined" && window.APP_REQUIRE_CUSTOM_FIREBASE) {
+    firebaseConfig = null;
+  } else {
+    firebaseConfig = yunancaFirebaseConfig;
+  }
+
+  if (firebaseConfig && firebaseConfig.apiKey && firebaseConfig.projectId && !firebaseConfig.projectId.includes("YOUR_PROJECT")) {
        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
        window.db = firebase.firestore();
        if (typeof firebase.auth === "function") {
