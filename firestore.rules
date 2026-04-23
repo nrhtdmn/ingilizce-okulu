@@ -1,0 +1,23 @@
+rules_version = '2';
+// Bu İngilizce uygulaması veriyi `global` koleksiyonunda tutar (örn. global/users, global/userdata).
+// Ayrıca başka bir yapı için `users/{userId}` altında Auth tabanlı kurallar kullanıyorsanız aşağıdaki blok kalır.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // (Sizin mevcut kuralınız) Firebase ile giriş yapmış kullanıcı kendi alt yoluna erişsin
+    match /users/{userId}/{document=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // İngilizce Okulu — istemciden okuma/yazma (global altındaki tüm belgeler + alt yollar)
+    match /global/{document=**} {
+      allow read, write: if true;
+    }
+
+    // Konu anlatımı yeni yapıda global_lessons koleksiyonunda tutuluyor.
+    // Bu koleksiyona erişim kapalı olursa dersler cihazlar arası senkronize olmaz.
+    match /global_lessons/{document=**} {
+      allow read, write: if true;
+    }
+  }
+}

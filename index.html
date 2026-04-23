@@ -3,41 +3,24 @@
 
 <head>
   <meta charset="UTF-8">
-  <script>
-    window.Y_TARGET_LANG = "en";
-    window.APP_STORAGE_PREFIX = "y_en_";
-    window.APP_BASE_PATH = "";
-    window.APP_SITE_LABEL = "İngilizce Okulu";
-    window.APP_SITE_URL = "www.ingilizceokulu.com";
-    window.APP_REQUIRE_CUSTOM_FIREBASE = true;
-    window.APP_FIREBASE_CONFIG = {
-      apiKey: "AIzaSyCO89F6AJevSjGE-zgu0Bne3QU2Rn8H1uI",
-      authDomain: "ingilizceokulu-e2771.firebaseapp.com",
-      projectId: "ingilizceokulu-e2771",
-      storageBucket: "ingilizceokulu-e2771.firebasestorage.app",
-      messagingSenderId: "285264009717",
-      appId: "1:285264009717:web:7c3d7ad571559778fca8bc",
-      measurementId: "G-1YFLWEST93"
-    };
-  </script>
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   
   <link rel="manifest" href="manifest.json">
-  <meta name="theme-color" content="#2563eb">
+  <meta name="theme-color" content="#4f8ef7">
   <link rel="icon" type="image/png" sizes="192x192" href="assets/icons/icon-192.png">
   <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="description" content="İngilizce Okulu — İngilizce öğrenim platformu. www.ingilizceokulu.com">
-  <meta name="application-name" content="İngilizce Okulu">
-  <link rel="canonical" href="https://www.ingilizceokulu.com/">
+  <meta name="description" content="English Reading School — English learning platform.">
+  <meta name="application-name" content="English Reading School">
+  <link rel="canonical" href="./">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="İngilizce Okulu">
-  <meta property="og:url" content="https://www.ingilizceokulu.com/">
-  <meta property="og:site_name" content="İngilizce Okulu">
+  <meta property="og:title" content="English Reading School">
+  <meta property="og:url" content="./">
+  <meta property="og:site_name" content="English Reading School">
 
-  <title>İngilizce Okulu</title>
+  <title>English Reading School</title>
 
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
@@ -57,8 +40,8 @@
         style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; width: 100%; gap: 15px; margin-bottom: 20px;">
 
         <div class="logo">
-          <h1 style="cursor:pointer;" onclick="switchMainTab('read'); window.scrollTo({ top: 0, behavior: 'smooth' });">İngilizce Okulu</h1>
-          <p>www.ingilizceokulu.com</p>
+          <h1 style="cursor:pointer;" onclick="switchMainTab('read'); window.scrollTo({ top: 0, behavior: 'smooth' });">English Reading School</h1>
+          <p>english-reading-school</p>
         </div>
 
         <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap; justify-content: flex-end;">
@@ -205,7 +188,7 @@
 
             <textarea id="admin-prac-text" class="auth-input"
               style="height:100px; resize:vertical; padding:10px; margin-bottom:5px;"
-              placeholder="İngilizce okuma metni..."></textarea>
+              placeholder="Yunanca Okuma Metni..."></textarea>
             <div style="font-size:0.8rem; color:var(--text-dim); margin-bottom:15px;">💡 Metinde boşluk bırakmak için
               <b>[1]</b>, <b>[2]</b> gibi numaralar yazın.</div>
 
@@ -403,7 +386,7 @@
         </div>
 
         <div class="input-panel" id="panel-paste">
-          <textarea id="input-text" placeholder="İngilizce metni buraya yapıştırın..."></textarea>
+          <textarea id="input-text" placeholder="Çalışmak istediğiniz metni buraya yapıştırın..."></textarea>
           <div class="btn-group">
             <button class="main-btn" onclick="processAndRenderText()">🚀 Metni İşle ve Oku</button>
             <button class="secondary-btn" onclick="saveCurrentReadingWork()">💾 Metni Kaydet</button>
@@ -460,7 +443,7 @@
     <div id="section-video" style="display:none;">
       <div id="video-library-view">
         <div class="video-setup-box">
-          <h3 style="color:var(--accent); margin-bottom:10px; font-size: 1.6rem;">📺 İngilizce Öğrenim Arşivi</h3>
+          <h3 style="color:var(--accent); margin-bottom:10px; font-size: 1.6rem;">📺 Yunanca Öğrenim Arşivi</h3>
           <p style="color:var(--text-dim); margin-bottom:0; font-size:1rem;">İlginizi çeken kategoriye tıklayın ve
             çalışmak istediğiniz videoyu seçin.</p>
         </div>
@@ -486,19 +469,21 @@
     <div id="section-media" style="display:none; animation: fadeIn 0.4s ease;">
       <div id="media-library-view">
         <div class="video-setup-box" style="border-color: rgba(74, 222, 128, 0.4);">
-          <h3 style="color:var(--success); margin-bottom:10px; font-size: 1.6rem;">📡 İngilizce medya (canlı)</h3>
-          <p style="color:var(--text-dim); margin-bottom:0; font-size:1rem;">İngilizce haber kanalları, radyolar ve gazetelerle pratik yapın.</p>
+          <h3 style="color:var(--success); margin-bottom:10px; font-size: 1.6rem;">📡 Canlı Yunan Medyası</h3>
+          <p style="color:var(--text-dim); margin-bottom:0; font-size:1rem;">Yunanistan TV kanalları, radyoları και
+            gazeteleriyle dile maruz kalın.</p>
         </div>
-        <h4 style="color:var(--text); margin-bottom: 15px; font-size: 1.2rem;">📺 Canlı TV (İngilizce)</h4>
+        <h4 style="color:var(--text); margin-bottom: 15px; font-size: 1.2rem;">📺 Canlı TV Kanalları</h4>
         <div class="text-grid" id="tv-grid-container" style="margin-bottom: 30px;"></div>
-        <h4 style="color:var(--accent2); margin-bottom: 15px; font-size: 1.2rem;">📻 Radyo (İngilizce)</h4>
+        <h4 style="color:var(--accent2); margin-bottom: 15px; font-size: 1.2rem;">📻 Canlı Radyo İstasyonları</h4>
         <div class="text-grid" id="radio-grid-container" style="margin-bottom: 40px;"></div>
         <div style="border-top: 1px solid var(--border); padding-top: 25px; margin-bottom: 30px;">
-          <h4 style="color:var(--accent); margin-bottom: 10px; font-size: 1.2rem;">📰 İngilizce gazeteler (okuma pratiği)
+          <h4 style="color:var(--accent); margin-bottom: 10px; font-size: 1.2rem;">📰 Yunan Gazeteleri (Okuma Pratiği)
           </h4>
           <div
             style="background: rgba(79,142,247,0.1); border: 1px solid rgba(79,142,247,0.3); padding: 12px; border-radius: 8px; margin-bottom: 20px; font-size: 0.95rem; color: var(--text-dim);">
-            💡 <b>Nasıl Çalışılır?</b> Bir siteye tıklayın, haber metnini kopyalayıp <b>Okuma Paneli &gt; URL'den Çek</b> veya yapıştır ile açın.
+            💡 <b>Nasıl Çalışılır?</b> Bir gazeteye tıklayın, ilginizi çeken haberin linkini kopyalayın και <b>Okuma
+              Paneli > URL'den Çek</b> bölümüne yapıştırarak haberi akıllı sözlüğümüzle okuyun!
           </div>
           <div class="text-grid" id="news-grid-container"></div>
         </div>
@@ -879,8 +864,8 @@
     <div class="video-setup-box"
       style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:15px; border-color: var(--accent2);">
       <div>
-        <h3 style="color:var(--accent2); margin-bottom:10px; font-size: 1.6rem;">🤖 İngilizce AI konuşma partneri</h3>
-        <p style="color:var(--text-dim); margin-bottom:0; font-size:1rem;">Mikrofonu açın ve İngilizce pratik yapın.
+        <h3 style="color:var(--accent2); margin-bottom:10px; font-size: 1.6rem;">🤖 Yunanca AI Konuşma Partneri</h3>
+        <p style="color:var(--text-dim); margin-bottom:0; font-size:1rem;">Mikrofonu açın ve Yunanca pratik yapın.
           Hatalarınız düzeltilecek ve doğal bir sohbet akışı sağlanacaktır.</p>
       </div>
 
@@ -905,7 +890,7 @@
         onclick="toggleMicrophone()" title="Bas ve Konuş">🎤</button>
 
       <input type="text" id="chat-text-input" class="auth-input" style="flex: 1; margin-bottom: 0; padding: 15px;"
-        placeholder="Veya mesajınızı İngilizce olarak buraya yazın..."
+        placeholder="Veya mesajınızı Yunanca olarak buraya yazın..."
         onkeydown="if(event.key==='Enter') sendChatMessage()">
 
       <button class="main-btn" style="padding: 15px 25px;" onclick="sendChatMessage()">Gönder ➔</button>
@@ -1176,20 +1161,20 @@
     </div>
   </div>
 
-  <script src="js/sinavlar-data.js"></script>
-  <script src="js/utils/practiceData.js"></script>
-  <script src="js/utils/helpers.js"></script>
-  <script src="js/utils/api.js"></script>
-  <script src="js/components/menu.js"></script>
-  <script src="js/components/modal.js"></script>
-  <script src="js/components/slider.js"></script>
-  <script src="js/pages/login.js"></script>
-  <script src="js/pages/home.js"></script>
+  <script src="js/sinavlar-data.js?v=20260421b"></script>
+  <script src="js/utils/practiceData.js?v=20260421b"></script>
+  <script src="js/utils/helpers.js?v=20260421b"></script>
+  <script src="js/utils/api.js?v=20260423q"></script>
+  <script src="js/components/menu.js?v=20260421b"></script>
+  <script src="js/components/modal.js?v=20260421b"></script>
+  <script src="js/components/slider.js?v=20260421b"></script>
+  <script src="js/pages/login.js?v=20260423f"></script>
+  <script src="js/pages/home.js?v=20260423zk"></script>
   
-  <script src="js/pages/chat.js"></script>
-  <script src="js/pages/kurs.js"></script>
+  <script src="js/pages/chat.js?v=20260421b"></script>
+  <script src="js/pages/kurs.js?v=20260421b"></script>
 
-  <script src="js/main.js"></script>
+  <script src="js/main.js?v=20260423a"></script>
 
 
 </body>
