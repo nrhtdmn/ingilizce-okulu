@@ -1,15 +1,7 @@
 function sendTelegramRegistrationNotice(label) {
   const botToken = "8741748332:AAEZI5xsFw6gLW5MnvsRGYKn91KrkieppaQ";
   const chatId = "5546102141";
-  const site =
-    typeof window !== "undefined" && window.APP_SITE_LABEL
-      ? window.APP_SITE_LABEL
-      : "Yunanca Okulu";
-  const siteUrl =
-    typeof window !== "undefined" && window.APP_SITE_URL
-      ? window.APP_SITE_URL
-      : "www.yunancaokulu.com";
-  const mesaj = `🚨 Yeni Kayıt Geldi!\n\n👤 ${label}\n\nLütfen ${site} (${siteUrl}) paneline girip onaylayın.`;
+  const mesaj = `🚨 Yeni Kayıt Geldi!\n\n👤 ${label}\n\nLütfen İngilizce Okulu (www.ingilizceokulu.com) paneline girip onaylayın.`;
   const telegramUrl = `https://api.telegram.org/bot${botToken}/sendMessage?chat_id=${chatId}&text=${encodeURIComponent(mesaj)}`;
   fetch(telegramUrl).then(() => console.log("Telegram bildirimi gönderildi.")).catch((e) => console.error("Telegram bildirimi başarısız:", e));
 }
@@ -31,8 +23,13 @@ function submitAuth() {
     if (row && row.password === p) {
       currentUser = row;
       currentUsername = u;
-      localStorage.setItem(appStoreKey("currentUser"), u);
+      localStorage.setItem("y_currentUser", u);
       loadUserData();
+      if (typeof window.fetchAndAttachUserStateSync === "function") {
+        window.fetchAndAttachUserStateSync(u).catch(function (e) {
+          console.error("fetchAndAttachUserStateSync", e);
+        });
+      }
       if (typeof renderSavedReadingWorks === "function") renderSavedReadingWorks();
       closeAuthModal();
       updateUserUI();
@@ -70,8 +67,13 @@ function submitAuth() {
     saveDb();
     currentUser = dbUsers[u];
     currentUsername = u;
-    localStorage.setItem(appStoreKey("currentUser"), u);
+    localStorage.setItem("y_currentUser", u);
     loadUserData();
+    if (typeof window.fetchAndAttachUserStateSync === "function") {
+      window.fetchAndAttachUserStateSync(u).catch(function (e) {
+        console.error("fetchAndAttachUserStateSync", e);
+      });
+    }
     if (typeof renderSavedReadingWorks === "function") renderSavedReadingWorks();
     closeAuthModal();
     updateUserUI();
@@ -102,19 +104,51 @@ async function signInWithGoogle() {
   }
 }
 
+/**
+ * Google e-postasına karşılık gelen dbUsers anahtarı.
+ * Kullanıcı adı + şifre ile kayıtlı hesapta contactEmail aynıysa aynı hesaba bağlanır (userdata anahtarı tutarlı kalır).
+ */
+function resolveGoogleAccountStorageKey(emailLower) {
+  const dbu = window.dbUsers;
+  if (!dbu || typeof dbu !== "object" || !emailLower) return emailLower;
+  if (dbu[emailLower] && typeof dbu[emailLower] === "object") return emailLower;
+  const keys = Object.keys(dbu);
+  for (let i = 0; i < keys.length; i++) {
+    const k = keys[i];
+    const row = dbu[k];
+    if (!row || typeof row !== "object") continue;
+    const ce = String(row.contactEmail || row.email || "").toLowerCase().trim();
+    if (ce && ce === emailLower) return k;
+  }
+  return emailLower;
+}
+
 /** Firestore yüklendikten veya oturum değişince çağrılır */
-window.syncAuthUserWithApp = function syncAuthUserWithApp() {
+window.syncAuthUserWithApp = async function syncAuthUserWithApp() {
   if (typeof firebase === "undefined" || typeof firebase.auth !== "function") return;
   const user = firebase.auth().currentUser;
   if (!user || !user.email) return;
   if (typeof dbUsers === "undefined" || !window.dbUsers) return;
 
   const email = user.email.toLowerCase();
+
+  if (!window.__usersDocSyncedFromFirestore && window.useFirebase && window.db) {
+    try {
+      const snap = await window.db.collection("global").doc("users").get();
+      if (snap.exists && typeof window.ingestUsersDoc === "function") {
+        window.ingestUsersDoc(snap);
+      }
+    } catch (err) {
+      console.warn("Google oturumu: kullanıcı listesi yeniden okunamadı", err);
+    }
+  }
+
   const dbu = window.dbUsers;
-  const isNew = !dbu[email];
+  const accountKey = resolveGoogleAccountStorageKey(email);
+  const isNew = !dbu[accountKey];
 
   if (isNew) {
-    dbu[email] = {
+    dbu[accountKey] = {
       email: email,
       uid: user.uid,
       authProvider: "google",
@@ -132,28 +166,38 @@ window.syncAuthUserWithApp = function syncAuthUserWithApp() {
       showToastMessage("✅ Google hesabı kaydedildi. Yönetici onayından sonra tam erişim.");
     }
   } else {
-    dbu[email].uid = user.uid;
-    dbu[email].email = email;
-    if (user.displayName) dbu[email].displayName = user.displayName;
-    if (user.photoURL) dbu[email].photoURL = user.photoURL;
-    if (!dbu[email].authProvider) dbu[email].authProvider = "google";
-    if (dbu[email].emailNotify === undefined) dbu[email].emailNotify = true;
+    dbu[accountKey].uid = user.uid;
+    dbu[accountKey].email = email;
+    if (user.displayName) dbu[accountKey].displayName = user.displayName;
+    if (user.photoURL) dbu[accountKey].photoURL = user.photoURL;
+    if (!dbu[accountKey].authProvider) dbu[accountKey].authProvider = "google";
+    if (dbu[accountKey].emailNotify === undefined) dbu[accountKey].emailNotify = true;
     saveDb();
   }
 
-  currentUser = dbu[email];
-  currentUsername = email;
-    localStorage.setItem(appStoreKey("currentUser"), email);
+  currentUser = dbu[accountKey];
+  currentUsername = accountKey;
+  localStorage.setItem("y_currentUser", accountKey);
   if (typeof loadUserData === "function") loadUserData();
+  if (typeof window.fetchAndAttachUserStateSync === "function") {
+    window.fetchAndAttachUserStateSync(accountKey).catch(function (e) {
+      console.error("fetchAndAttachUserStateSync", e);
+    });
+  }
   if (typeof renderSavedReadingWorks === "function") renderSavedReadingWorks();
   if (typeof updateUserUI === "function") updateUserUI();
   if (typeof closeAuthModal === "function") closeAuthModal();
 };
 
+let _firebaseAuthListenerRegistered = false;
+
 function initFirebaseAuth() {
   if (typeof firebase === "undefined" || typeof firebase.auth !== "function") return;
+  if (_firebaseAuthListenerRegistered) return;
+  _firebaseAuthListenerRegistered = true;
   firebase.auth().onAuthStateChanged(function (user) {
     if (!user) {
+      if (typeof window.detachUserStateSync === "function") window.detachUserStateSync();
       if (
         typeof currentUser !== "undefined" &&
         currentUser &&
@@ -161,7 +205,7 @@ function initFirebaseAuth() {
       ) {
         currentUser = null;
         currentUsername = null;
-        localStorage.removeItem(appStoreKey("currentUser"));
+        localStorage.removeItem("y_currentUser");
         userDecks = { "Genel Kelimeler": [] };
         userCustomDict = new Map();
         if (typeof renderDecksAccordion === "function") renderDecksAccordion();
@@ -170,18 +214,23 @@ function initFirebaseAuth() {
       return;
     }
     if (typeof window.syncAuthUserWithApp === "function") {
-      window.syncAuthUserWithApp();
+      window.syncAuthUserWithApp().catch(function (err) {
+        console.error("syncAuthUserWithApp", err);
+      });
     }
   });
 }
 
+window.initFirebaseAuth = initFirebaseAuth;
+
 function logout() {
+  if (typeof window.detachUserStateSync === "function") window.detachUserStateSync();
   if (typeof firebase !== "undefined" && typeof firebase.auth === "function") {
     firebase.auth().signOut().catch(function () {});
   }
   currentUser = null;
   currentUsername = null;
-  localStorage.removeItem(appStoreKey("currentUser"));
+  localStorage.removeItem("y_currentUser");
   userDecks = { "Genel Kelimeler": [] };
   userCustomDict = new Map();
   renderDecksAccordion();

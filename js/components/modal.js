@@ -214,7 +214,37 @@ function openAnnouncementsModal() {
   }
 }
 
+if (!window.__popupPointerBindDone) {
+  window.__popupPointerBindDone = true;
+  window.__popupPointerDown = false;
+  document.addEventListener("mousedown", function () { window.__popupPointerDown = true; });
+  document.addEventListener("mouseup", function () { window.__popupPointerDown = false; });
+  document.addEventListener("touchstart", function () { window.__popupPointerDown = true; }, { passive: true });
+  document.addEventListener("touchend", function () { window.__popupPointerDown = false; }, { passive: true });
+}
+
 function triggerWordPopup(event, word, contextSentence) {
+  if (window.__popupPointerDown) return;
+  const selectedTextNow = String((window.getSelection && window.getSelection().toString()) || "").trim();
+  // Kullanıcı metin seçerken tek kelime popup'ı açılmasın; seçim popup'ı ayrıca tetiklenir.
+  if (event && selectedTextNow.length >= 2) return;
+
+  // Tıklama bırakıldıktan kısa süre sonra aç (özellikle mobil/drag seçimde daha doğal his verir).
+  if (event) {
+    const isTouchLikeDevice =
+      ("ontouchstart" in window) ||
+      (typeof navigator !== "undefined" && (navigator.maxTouchPoints || 0) > 0);
+    const openDelayMs = isTouchLikeDevice ? 420 : 260;
+    if (window.__popupOpenDelayTimer) clearTimeout(window.__popupOpenDelayTimer);
+    window.__popupOpenDelayTimer = setTimeout(function () {
+      if (window.__popupPointerDown) return;
+      const selectedLate = String((window.getSelection && window.getSelection().toString()) || "").trim();
+      if (selectedLate.length >= 2) return;
+      triggerWordPopup(null, word, contextSentence);
+    }, openDelayMs);
+    return;
+  }
+
   const isLoggedIn = !!currentUser && currentUser.status === 'approved';
   activeTokenElement = (event && event.target && event.target.classList && event.target.classList.contains("tok")) ? event.target : null;
   if (activeTokenElement) window.activeSelectionTokenElements = [activeTokenElement];
@@ -230,12 +260,8 @@ function triggerWordPopup(event, word, contextSentence) {
   const stBox = document.getElementById('wp-sentence-translate');
   if (stBox) { stBox.hidden = true; stBox.innerHTML = ''; }
   const cleanWord = String(word || "").replace(/[.,!?;():"""«»]/g, '').trim();
-  if (cleanWord.length > 0) {
-    const phon = typeof getLexPhoneticDisplay === 'function' ? getLexPhoneticDisplay(cleanWord) : getGreekPhonetics(cleanWord);
-    const lab = (typeof getTargetLexLang === 'function' && getTargetLexLang() === 'en') ? 'Kelime:' : 'Okunuşu:';
-    phoneticBox.innerHTML = '<strong>' + lab + '</strong> ' + phon;
-    phoneticBox.style.display = 'block';
-  } else { phoneticBox.style.display = 'none'; }
+  if (cleanWord.length > 0) { phoneticBox.innerHTML = '<strong>Okunuşu:</strong> ' + getGreekPhonetics(cleanWord); phoneticBox.style.display = 'block'; } 
+  else { phoneticBox.style.display = 'none'; }
 
   let ctx = String(contextSentence || '').trim();
   if (ctx.length > 80) {
@@ -257,6 +283,86 @@ function triggerWordPopup(event, word, contextSentence) {
 }
 
 function closePopup() { document.getElementById('wpop').style.display = "none"; stopSpeech(); }
+
+window.bindGlobalTokenSelectionTranslation = function () {
+  if (window.__globalTokenSelectionBindingDone) return;
+  window.__globalTokenSelectionBindingDone = true;
+
+  let selectionDebounceTimer = null;
+  let lastPopupSelection = "";
+  const isTouchLikeDevice =
+    ("ontouchstart" in window) ||
+    (typeof navigator !== "undefined" && (navigator.maxTouchPoints || 0) > 0);
+
+  const inIgnoredContainer = function (node) {
+    if (!node) return false;
+    const el = node.nodeType === 1 ? node : node.parentElement;
+    if (!el) return false;
+    return !!el.closest('input, textarea, [contenteditable="true"], #admin-modal, #wpop');
+  };
+
+  const collectTokenSelection = function () {
+    const sel = window.getSelection && window.getSelection();
+    if (!sel || !sel.rangeCount) return null;
+    if (inIgnoredContainer(sel.anchorNode) || inIgnoredContainer(sel.focusNode)) return null;
+    const text = String(sel.toString() || "").trim();
+    if (!text || text.length < 2 || text.length > 260) return null;
+    if (!/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return null;
+
+    const range = sel.getRangeAt(0);
+    const selectedTokens = Array.from(document.querySelectorAll(".tok")).filter((span) => {
+      try {
+        return range.intersectsNode(span);
+      } catch (e) {
+        return false;
+      }
+    });
+    if (selectedTokens.length < 2) return null;
+
+    return {
+      text: text.replace(/\s+/g, " "),
+      tokens: selectedTokens,
+    };
+  };
+
+  const applySelection = function (openPopup) {
+    if (window.__popupPointerDown) return;
+    const data = collectTokenSelection();
+    if (!data) return;
+    window.activeSelectionTokenElements = data.tokens;
+    window.lastReaderSelectionMeta = {
+      text: data.text,
+      tokenCount: data.tokens.length,
+      createdAt: Date.now(),
+    };
+    if (!openPopup) return;
+    const sig = `${data.text}|${data.tokens.length}`;
+    if (sig === lastPopupSelection) return;
+    lastPopupSelection = sig;
+    triggerWordPopup(null, data.text, data.text);
+  };
+
+  document.addEventListener("selectionchange", function () {
+    if (selectionDebounceTimer) clearTimeout(selectionDebounceTimer);
+    // Mobilde native seçim menüsünden sonra popup erken açılmasın diye gecikme artırıldı.
+    selectionDebounceTimer = setTimeout(function () {
+      applySelection(true);
+    }, isTouchLikeDevice ? 320 : 190);
+  });
+
+  document.addEventListener("mouseup", function () {
+    setTimeout(function () {
+      applySelection(true);
+    }, 20);
+  });
+
+  document.addEventListener("touchend", function () {
+    setTimeout(function () {
+      applySelection(true);
+    }, 360);
+  }, { passive: true });
+};
+
 function toggleHighlightWord() {
   const selectedTokens = Array.isArray(window.activeSelectionTokenElements)
     ? window.activeSelectionTokenElements.filter((el) => el && el.classList && el.classList.contains("tok"))
@@ -391,12 +497,12 @@ function setOsymFontSize(size) {
   if (!workspace) return;
   workspace.classList.remove("osym-font-small", "osym-font-normal", "osym-font-large");
   workspace.classList.add(`osym-font-${size}`);
-  localStorage.setItem(appStoreKey("osym_font_size"), size);
+  localStorage.setItem("osym_font_size", size);
   syncOsymSettingsButtons();
 }
 
 function syncOsymSettingsButtons() {
-  const selected = localStorage.getItem(appStoreKey("osym_font_size")) || "normal";
+  const selected = localStorage.getItem("osym_font_size") || "normal";
   document.querySelectorAll(".osym-setting-btn").forEach((btn) => {
     btn.classList.remove("active");
     const isMatch = btn.getAttribute("onclick") === `setOsymFontSize('${selected}')`;
@@ -405,7 +511,7 @@ function syncOsymSettingsButtons() {
 }
 
 document.addEventListener("DOMContentLoaded", function () {
-  const savedSize = localStorage.getItem(appStoreKey("osym_font_size")) || "normal";
+  const savedSize = localStorage.getItem("osym_font_size") || "normal";
   setOsymFontSize(savedSize);
 });
 

@@ -1,36 +1,15 @@
-/** localStorage anahtarı: kök sitede `y_`, İngilizce sitede `y_en_` (index.html içinde APP_STORAGE_PREFIX). */
-function appStoreKey(name) {
-  const p =
-    typeof window !== "undefined" && window.APP_STORAGE_PREFIX
-      ? String(window.APP_STORAGE_PREFIX)
-      : "y_";
-  return p + name;
-}
-window.appStoreKey = appStoreKey;
-
-/** Alt klasörden (örn. ingilizce/index.html) açıldığında veri klasörlerine giden göreli yol (örn. "../"). */
-function appAssetPath(path) {
-  if (!path || /^https?:\/\//i.test(String(path))) return path;
-  const base =
-    typeof window !== "undefined" && window.APP_BASE_PATH
-      ? String(window.APP_BASE_PATH)
-      : "";
-  return base + String(path).replace(/^\//, "");
-}
-window.appAssetPath = appAssetPath;
-
 // --- KÜRESEL (GLOBAL) DEĞİŞKENLER ---
 let dbUsers;
-try { dbUsers = JSON.parse(localStorage.getItem(appStoreKey('users_db'))) || {}; } catch(e) { dbUsers = {}; localStorage.removeItem(appStoreKey('users_db')); }
+try { dbUsers = JSON.parse(localStorage.getItem('y_users_db')) || {}; } catch(e) { dbUsers = {}; localStorage.removeItem('y_users_db'); }
 dbUsers['nurhat'] = { password: 'Deniz28', role: 'admin', status: 'approved', isPremium: true, credits: 999999 };
 window.dbUsers = dbUsers; // window.dbUsers ile let dbUsers her zaman aynı objeyi gösterir
 
 let dbUserData;
-try { dbUserData = JSON.parse(localStorage.getItem(appStoreKey('userdata_db'))) || {}; } catch(e) { dbUserData = {}; localStorage.removeItem(appStoreKey('userdata_db')); }
+try { dbUserData = JSON.parse(localStorage.getItem('y_userdata_db')) || {}; } catch(e) { dbUserData = {}; localStorage.removeItem('y_userdata_db'); }
 window.dbUserData = dbUserData; // window.dbUserData ile let dbUserData her zaman aynı objeyi gösterir
 
 let dbAnnouncements;
-try { dbAnnouncements = JSON.parse(localStorage.getItem(appStoreKey('announcements_db'))) || []; } catch(e) { dbAnnouncements = []; localStorage.removeItem(appStoreKey('announcements_db')); }
+try { dbAnnouncements = JSON.parse(localStorage.getItem('y_announcements_db')) || []; } catch(e) { dbAnnouncements = []; localStorage.removeItem('y_announcements_db'); }
 
 // YENİ EKLENEN SATIR: Referansın kaybolmaması için window objesine bağladık
 window.dbAnnouncements = dbAnnouncements;
@@ -39,7 +18,7 @@ window.dbAnnouncements = dbAnnouncements;
 let useFirebase = false;
 let db = null;
 let currentUser = null;
-let currentUsername = localStorage.getItem(appStoreKey('currentUser')) || null;
+let currentUsername = localStorage.getItem('y_currentUser') || null;
 
 let userDecks = { "Genel Kelimeler": [] };
 let userCustomDict = new Map();
@@ -54,36 +33,7 @@ let ytPlayer = null, ytSubtitles = [], videoSyncInterval = null, currentActiveSu
 // Sözlük ve Test Değişkenleri
 let activeWordString = "", activeContextSentence = "", activeTokenElement = null;
 let currentQuizPool = [], currentQuizIndex = 0, currentQuizQuestion = null, quizMistakes = [], correctCount = 0, totalInitialWords = 0, isQuestionActive = false;
-
-/** Öğrenilen dil: sayfa yüklenmeden önce window.Y_TARGET_LANG ile sabitlenir (el | en). */
-function getTargetLexLang() {
-  if (typeof window !== "undefined" && window.Y_TARGET_LANG === "en") return "en";
-  return "el";
-}
-window.getTargetLexLang = getTargetLexLang;
-
-function isLexTargetToken(token) {
-  if (token == null || token === '') return false;
-  const s = String(token);
-  if (getTargetLexLang() === 'en') {
-    return /[A-Za-z\u00C0-\u024F]/.test(s);
-  }
-  return /[\u0370-\u03FF]/.test(s);
-}
-window.isLexTargetToken = isLexTargetToken;
-
-/** Kelime popup / sözlük: Yunanca fonetik veya İngilizce için düz yazı */
-function getLexPhoneticDisplay(word) {
-  const w = String(word || '').trim();
-  if (!w) return '';
-  if (getTargetLexLang() === 'en') {
-    return w;
-  }
-  return getGreekPhonetics(w);
-}
-window.getLexPhoneticDisplay = getLexPhoneticDisplay;
-
-let currentDictMode = getTargetLexLang() === 'en' ? 'en-tr' : 'gr-tr';
+let currentDictMode = 'en-tr';
 
 // Sınav (e-YDS) Değişkenleri
 let GLOBAL_SORU_BANKASI = [], examSession = [], currentQIndex = 0, examState = {}, examTimerInterval = null, examToolMode = 'dict', clockInterval = null, examStartTime = null;
@@ -283,16 +233,6 @@ const VIDEO_KATALOGU = [
   { id: "Ydbk96cqtvQ", title: "Matematik - 50'ye Kadar Sayılar, Onlar ve Birler Basamağı, Toplama - 1. Sınıf Seviye 22", level: "A1", category: "📚 Yunanca" }
 ];
 
-/** İngilizce kurs: altyazı dosyaları altyazilar/{id}.json (gr = İngilizce satır, tr = Türkçe) */
-const ENGLISH_VIDEO_KATALOGU = [
-  { id: "arj7oStglkE", title: "Inside the mind of a master procrastinator (TED)", level: "B1 - B2", category: "📚 İngilizce" }
-];
-
-function getActiveVideoKatalogu() {
-  return getTargetLexLang() === 'en' ? ENGLISH_VIDEO_KATALOGU : VIDEO_KATALOGU;
-}
-window.getActiveVideoKatalogu = getActiveVideoKatalogu;
-
 const HUGE_RAW_DICTIONARY = [
   ["ανθρώπων", "insanların"], ["αβαείο", "manastır"], ["αβαείου", "manastırın"], ["αβαία", "manastırlar"],
   ["αβαίων", "manastırların"], ["άβαχας", "abaküs"], ["άβαχα", "abaküsü"], ["άβαχες", "abaküsler"],
@@ -330,37 +270,6 @@ const GREEK_RADIO_CHANNELS = [
   { name: "Dalkas 88.2", url: "https://n0e.radiojar.com/pr9r38w802hvv?rj-ttl=5&rj-tok=AAABnS7ljXoATDqvhxMvAiA75A" },
   { name: "Derti 98.6", url: "https://n02.radiojar.com/pr9r38w802hvv?rj-ttl=5&rj-tok=AAABnS7leDYAvFErD84b3zkuqg" }
 ];
-
-const ENGLISH_TV_CHANNELS = [
-  { name: "NASA TV (US)", url: "https://ntv1.akamaized.net/hls/live/586495/NASA-NTV1-HLS/master.m3u8" },
-  { name: "France 24 English", url: "https://static.france24.com/live/F24_EN_LO_HLS/live_web.m3u8" },
-  { name: "DW English", url: "https://mcdn.dw.com/i/dw/livestream_dw_world_en_tv" }
-];
-
-const ENGLISH_NEWSPAPERS = [
-  { name: "BBC News", desc: "Uluslararası haberler (İngilizce)", url: "https://www.bbc.com/news" },
-  { name: "The Guardian", desc: "İngiliz gazetesi", url: "https://www.theguardian.com/international" },
-  { name: "Reuters", desc: "Ajans haberleri", url: "https://www.reuters.com/" },
-  { name: "The New York Times", desc: "ABD merkezli günlük", url: "https://www.nytimes.com/" }
-];
-
-const ENGLISH_RADIO_CHANNELS = [
-  { name: "BBC World Service (stream)", url: "https://stream.live.vc.bbcmedia.co.uk/bbc_world_service" },
-  { name: "NPR News", url: "https://npr-ice.streamguys1.com/live.mp3" }
-];
-
-function getActiveTVChannels() {
-  return getTargetLexLang() === 'en' ? ENGLISH_TV_CHANNELS : GREEK_TV_CHANNELS;
-}
-function getActiveNewspapers() {
-  return getTargetLexLang() === 'en' ? ENGLISH_NEWSPAPERS : GREEK_NEWSPAPERS;
-}
-function getActiveRadioChannels() {
-  return getTargetLexLang() === 'en' ? ENGLISH_RADIO_CHANNELS : GREEK_RADIO_CHANNELS;
-}
-window.getActiveTVChannels = getActiveTVChannels;
-window.getActiveNewspapers = getActiveNewspapers;
-window.getActiveRadioChannels = getActiveRadioChannels;
 
 
 
@@ -421,7 +330,7 @@ function tokenizeForExamInteractive(text) {
   let html = '';
   let safeSentence = text.replace(/'/g, "\\'").replace(/"/g, '\\"'); 
   text.split(/(\s+)/).forEach(token => {
-    if (typeof isLexTargetToken === 'function' ? isLexTargetToken(token) : /[\u0370-\u03FF]/.test(token)) {
+    if (/[A-Za-z]/.test(token)) {
       let safeWord = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
       html += `<span class="tok" onclick="examTokenClicked(event, '${safeWord}', '${safeSentence}')">${token}</span>`;
     } else {
@@ -445,7 +354,7 @@ function tokenizePracHTML(text) {
     if (!token) return;
     if (token.startsWith('<')) {
       html += token;
-    } else if (typeof isLexTargetToken === 'function' ? isLexTargetToken(token) : /[\u0370-\u03FF]/.test(token)) {
+    } else if (/[A-Za-z]/.test(token)) {
       let safeWord = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
       html += `<span class="tok" onclick="event.stopPropagation(); triggerWordPopup(event, '${safeWord}', '${safeSentence}')">${token}</span>`;
     } else {

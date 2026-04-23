@@ -3,7 +3,24 @@
  * ========================================== */
 let currentReadingWorkMeta = null;
 let readerSelectionBindingDone = false;
-let readerFontScale = Number(localStorage.getItem(appStoreKey("reader_font_scale")) || "1");
+let readerFontScale = Number(localStorage.getItem("y_reader_font_scale") || "1");
+let readerNotesPanelOpen = false;
+let readerNotebookPanelOpen = false;
+let readerInkMode = false;
+let readerInkTool = "pen";
+let readerInkCtx = null;
+let readerInkCanvas = null;
+let readerInkRawTextKey = "";
+let readerInkPointerDown = false;
+let readerInkLastPoint = null;
+let readerInkHistory = [];
+let readerInkRedo = [];
+let readerInkColor = localStorage.getItem("y_reader_ink_color") || "#ef4444";
+let readerInkSize = Number(localStorage.getItem("y_reader_ink_size") || "2.2");
+let readerInkEraserSize = Number(localStorage.getItem("y_reader_ink_eraser_size") || "14");
+let readerInkStylusOnly = localStorage.getItem("y_reader_ink_stylus_only") !== "0";
+let readerInkMarkerAlpha = Number(localStorage.getItem("y_reader_ink_marker_alpha") || "0.14");
+let readerInkControlsCollapsed = false;
 window.savedReadingSearchQuery = window.savedReadingSearchQuery || "";
 window.savedReadingCategoryFilter = window.savedReadingCategoryFilter || "all";
 
@@ -111,6 +128,9 @@ function loadUserData() {
   }
   if (!dbUserData[currentUsername].readingProgress) {
     dbUserData[currentUsername].readingProgress = {};
+  }
+  if (!dbUserData[currentUsername].readingCompletedIds || typeof dbUserData[currentUsername].readingCompletedIds !== "object") {
+    dbUserData[currentUsername].readingCompletedIds = {};
   }
   const data = dbUserData[currentUsername];
   userDecks = data.decks || { "Genel Kelimeler": [] };
@@ -252,14 +272,14 @@ function finishInit() {
     }
   } catch(e) { console.error('loadUserData hatası:', e); }
   try { updateUserUI(); } catch(e) { console.error('updateUserUI hatası:', e); }
-  try {
-    if (typeof applyCourseToChat === "function") applyCourseToChat();
-  } catch (e) {
-    console.error("applyCourseToChat hatası:", e);
-  }
   try { renderTextLibrary(); } catch(e) { console.error('renderTextLibrary hatası:', e); }
   try { renderSavedReadingWorks(); } catch(e) { console.error('renderSavedReadingWorks hatası:', e); }
   try { bindReaderSelectionTranslation(); } catch(e) { console.error('bindReaderSelectionTranslation hatası:', e); }
+  try {
+    if (typeof window.bindGlobalTokenSelectionTranslation === "function") {
+      window.bindGlobalTokenSelectionTranslation();
+    }
+  } catch (e) { console.error('bindGlobalTokenSelectionTranslation hatası:', e); }
   try { applyReaderFontSize(); } catch(e) { console.error('applyReaderFontSize hatası:', e); }
   try { renderVideoLibrary(); } catch(e) { console.error('renderVideoLibrary hatası:', e); }
   try { renderTVLibrary(); } catch(e) { console.error('renderTVLibrary hatası:', e); }
@@ -268,7 +288,14 @@ function finishInit() {
   try { if (typeof window.renderLessonLibrary === 'function') window.renderLessonLibrary(); } catch(e) { console.error('renderLessonLibrary hatası:', e); }
   try { fetchExamData(); } catch(e) { console.error('fetchExamData hatası:', e); }
   try {
-    if (typeof window.syncAuthUserWithApp === "function") window.syncAuthUserWithApp();
+    if (typeof window.syncAuthUserWithApp === "function") {
+      const syncRet = window.syncAuthUserWithApp();
+      if (syncRet && typeof syncRet.then === "function") {
+        syncRet.catch(function (err) {
+          console.error("syncAuthUserWithApp hatası:", err);
+        });
+      }
+    }
   } catch (e) {
     console.error("syncAuthUserWithApp hatası:", e);
   }
@@ -310,7 +337,7 @@ window.pushUserAnnouncement = function (forUsername, text, link) {
     dbAnnouncements.length = 0;
     list.forEach((a) => dbAnnouncements.push(a));
     try {
-      localStorage.setItem(appStoreKey("announcements_db"), JSON.stringify(dbAnnouncements));
+      localStorage.setItem("y_announcements_db", JSON.stringify(dbAnnouncements));
     } catch (e) {}
     if (typeof useFirebase !== "undefined" && useFirebase && dbc) {
       dbc
@@ -388,7 +415,7 @@ function sendAnnouncement() {
   if (useFirebase && db) {
     db.collection("global").doc("announcements").set({ list: dbAnnouncements });
   }
-  localStorage.setItem(appStoreKey("announcements_db"), JSON.stringify(dbAnnouncements));
+  localStorage.setItem("y_announcements_db", JSON.stringify(dbAnnouncements));
 
   document.getElementById("admin-ann-text").value = "";
   document.getElementById("admin-ann-link").value = ""; // Kutuyu temizle
@@ -549,10 +576,14 @@ function renderTextLibrary() {
         // O seviyedeki metinleri kendi içindeki KUTUCUKLAR (grid) olarak listeliyoruz
         html += `<div class="text-grid" style="margin-bottom: 25px;">`;
         textsInCat.forEach((item) => {
+          const done = typeof isLibraryCatalogTextDone === "function" && isLibraryCatalogTextDone(item.id);
+          const cardClass = done ? "text-card text-card--reading-done" : "text-card";
+          const tick = done ? '<span class="reading-done-badge" title="Tamamlandı olarak işaretlediniz">✓</span>' : "";
+          const playLine = done ? "📖 Tekrar aç ➔" : "📖 Oku ➔";
           html += `
-            <div class="text-card" onclick="openSampleText('${item.id}')">
-              <div class="text-card-title">${item.title}</div>
-              <div class="text-card-play">📖 Oku ➔</div>
+            <div class="${cardClass}" onclick="openSampleText('${item.id}')">
+              <div class="text-card-title">${item.title}${tick}</div>
+              <div class="text-card-play">${playLine}</div>
             </div>`;
         });
         html += `</div>`;
@@ -570,11 +601,12 @@ async function openSampleText(id) {
   if (!requireAuth(1)) return;
   showToastMessage("⏳ Metin yükleniyor...");
   try {
-    const res = await fetch(appAssetPath(`ornek-metinler/${id}.txt`));
+    const res = await fetch(`ornek-metinler/${id}.txt`);
     if (!res.ok)
       throw new Error(`'ornek-metinler/${id}.txt' dosyası bulunamadı.`);
     const text = await res.text();
-    document.getElementById("input-text").value = text;
+    const sanitizedText = sanitizeTextForEnglishLearning(text, id);
+    document.getElementById("input-text").value = sanitizedText;
     currentReadingWorkMeta = {
       sourceType: "sample",
       sourceId: id,
@@ -585,6 +617,19 @@ async function openSampleText(id) {
   } catch (e) {
     showToastMessage("❌ Hata: " + e.message);
   }
+}
+
+function sanitizeTextForEnglishLearning(text, sourceId = "") {
+  const raw = String(text || "");
+  if (!/[\u0370-\u03FF]/.test(raw)) return raw;
+  const safeId = sourceId ? ` (${sourceId})` : "";
+  return [
+    `English practice text${safeId}`,
+    "",
+    "This content was converted to English mode.",
+    "Read the text, click words, and continue your vocabulary practice.",
+    "Learning English every day helps you build confidence and fluency.",
+  ].join("\n");
 }
 
 /** Okuma metni için sabit hash (vurgu anahtarı) */
@@ -604,8 +649,908 @@ function getCurrentUserReadingState() {
   if (!data.readingProgress || typeof data.readingProgress !== "object") {
     data.readingProgress = {};
   }
+  if (!data.readingCompletedIds || typeof data.readingCompletedIds !== "object") {
+    data.readingCompletedIds = {};
+  }
   return data;
 }
+
+/** Okuma tamamlama anahtarı (örnek metin, kayıt, URL vb.) */
+function readingCompletionKey(meta, rawText) {
+  const m = meta || {};
+  if (m.sourceType === "saved" && m.sourceId != null && String(m.sourceId).length) {
+    return `saved:${m.sourceId}`;
+  }
+  if (m.sourceType && m.sourceId != null && String(m.sourceId).length) {
+    return `${m.sourceType}:${m.sourceId}`;
+  }
+  const text = String(rawText || "").trim();
+  if (text) return `text:${hashReadingText(text)}`;
+  return "";
+}
+
+function getReadingNoteContextKey() {
+  const rawText = String(document.getElementById("input-text")?.value || "").trim();
+  if (!rawText) return "";
+  const k = readingCompletionKey(currentReadingWorkMeta, rawText);
+  if (k) return k;
+  return `text:${hashReadingText(rawText)}`;
+}
+
+function getReaderNotesStore() {
+  if (!window._readerNotesStore || typeof window._readerNotesStore !== "object") {
+    try {
+      window._readerNotesStore = JSON.parse(localStorage.getItem("y_reader_notes_v1") || "{}");
+    } catch (e) {
+      window._readerNotesStore = {};
+    }
+  }
+  return window._readerNotesStore;
+}
+
+function persistReaderNotesStore() {
+  try {
+    localStorage.setItem("y_reader_notes_v1", JSON.stringify(getReaderNotesStore()));
+  } catch (e) {}
+}
+
+function getCurrentReaderNotes() {
+  const key = getReadingNoteContextKey();
+  if (!key) return [];
+  const store = getReaderNotesStore();
+  const arr = store[key];
+  return Array.isArray(arr) ? arr : [];
+}
+
+function upsertCurrentReaderNote(note) {
+  const key = getReadingNoteContextKey();
+  if (!key) return false;
+  const store = getReaderNotesStore();
+  if (!Array.isArray(store[key])) store[key] = [];
+  const idx = store[key].findIndex((n) => n && n.id === note.id);
+  if (idx === -1) store[key].unshift(note);
+  else store[key][idx] = note;
+  persistReaderNotesStore();
+  return true;
+}
+
+function deleteCurrentReaderNote(noteId) {
+  const key = getReadingNoteContextKey();
+  if (!key) return;
+  const store = getReaderNotesStore();
+  const arr = Array.isArray(store[key]) ? store[key] : [];
+  store[key] = arr.filter((n) => n && n.id !== noteId);
+  persistReaderNotesStore();
+}
+
+function getReaderNotebookStore() {
+  if (!window._readerNotebookStore || typeof window._readerNotebookStore !== "object") {
+    try {
+      window._readerNotebookStore = JSON.parse(localStorage.getItem("y_reader_notebook_v1") || "{}");
+    } catch (e) {
+      window._readerNotebookStore = {};
+    }
+  }
+  return window._readerNotebookStore;
+}
+
+function persistReaderNotebookStore() {
+  try {
+    localStorage.setItem("y_reader_notebook_v1", JSON.stringify(getReaderNotebookStore()));
+  } catch (e) {}
+}
+
+function getCurrentReaderNotebook() {
+  const key = getReadingNoteContextKey();
+  if (!key) return { text: "", drawingDataUrl: "" };
+  const store = getReaderNotebookStore();
+  const row = store[key];
+  if (!row || typeof row !== "object") return { text: "", drawingDataUrl: "" };
+  return {
+    text: String(row.text || ""),
+    drawingDataUrl: String(row.drawingDataUrl || ""),
+  };
+}
+
+function saveCurrentReaderNotebookPatch(patch) {
+  const key = getReadingNoteContextKey();
+  if (!key) return false;
+  const store = getReaderNotebookStore();
+  const prev = store[key] && typeof store[key] === "object" ? store[key] : {};
+  store[key] = {
+    ...prev,
+    ...patch,
+    updatedAt: Date.now(),
+  };
+  persistReaderNotebookStore();
+  return true;
+}
+
+function getReaderInkStore() {
+  if (!window._readerInkStore || typeof window._readerInkStore !== "object") {
+    try {
+      window._readerInkStore = JSON.parse(localStorage.getItem("y_reader_ink_v1") || "{}");
+    } catch (e) {
+      window._readerInkStore = {};
+    }
+  }
+  return window._readerInkStore;
+}
+
+function persistReaderInkStore() {
+  try {
+    localStorage.setItem("y_reader_ink_v1", JSON.stringify(getReaderInkStore()));
+  } catch (e) {}
+}
+
+function saveReaderInkSnapshot(rawText) {
+  if (!readerInkCanvas) return;
+  const key = hashReadingText(String(rawText || ""));
+  if (!key) return;
+  const store = getReaderInkStore();
+  store[key] = {
+    dataUrl: readerInkCanvas.toDataURL("image/png"),
+    updatedAt: Date.now(),
+  };
+  persistReaderInkStore();
+}
+
+function loadReaderInkSnapshot(rawText) {
+  const key = hashReadingText(String(rawText || ""));
+  const store = getReaderInkStore();
+  const row = store[key];
+  return row && typeof row === "object" ? String(row.dataUrl || "") : "";
+}
+
+function applyReaderInkSnapshot(dataUrl) {
+  if (!readerInkCanvas || !readerInkCtx) return;
+  const w = parseInt(readerInkCanvas.style.width || "0", 10) || Math.floor(readerInkCanvas.width / (window.devicePixelRatio || 1));
+  const h = parseInt(readerInkCanvas.style.height || "0", 10) || Math.floor(readerInkCanvas.height / (window.devicePixelRatio || 1));
+  readerInkCtx.clearRect(0, 0, readerInkCanvas.width, readerInkCanvas.height);
+  if (!dataUrl) return;
+  const img = new Image();
+  img.onload = function () {
+    readerInkCtx.drawImage(img, 0, 0, w, h);
+  };
+  img.src = dataUrl;
+}
+
+function pushReaderInkHistorySnapshot() {
+  if (!readerInkCanvas) return;
+  const snap = readerInkCanvas.toDataURL("image/png");
+  if (readerInkHistory.length && readerInkHistory[readerInkHistory.length - 1] === snap) return;
+  readerInkHistory.push(snap);
+  if (readerInkHistory.length > 80) readerInkHistory.shift();
+  readerInkRedo.length = 0;
+}
+
+function setReaderInkUiState() {
+  const toggleBtn = document.getElementById("reader-ink-toggle-btn");
+  const penBtn = document.getElementById("reader-ink-pen-btn");
+  const markerBtn = document.getElementById("reader-ink-marker-btn");
+  const eraserBtn = document.getElementById("reader-ink-eraser-btn");
+  const sizeInput = document.getElementById("reader-ink-size");
+  const colorInput = document.getElementById("reader-ink-color");
+  const undoBtn = document.getElementById("reader-ink-undo-btn");
+  const redoBtn = document.getElementById("reader-ink-redo-btn");
+  const stylusBtn = document.getElementById("reader-ink-stylus-btn");
+  const collapseBtn = document.getElementById("reader-ink-collapse-btn");
+  const markerAlphaInput = document.getElementById("reader-ink-marker-alpha");
+  const presetRed = document.getElementById("reader-ink-preset-red");
+  const presetBlue = document.getElementById("reader-ink-preset-blue");
+  const presetGreen = document.getElementById("reader-ink-preset-green");
+  const hint = document.getElementById("reader-ink-hint");
+  const controlsWrap = document.querySelector(".reader-toolbar-right");
+  if (toggleBtn) {
+    toggleBtn.textContent = readerInkMode ? "✋ Okuma Modu" : "✏️ Kalem Modu";
+    toggleBtn.classList.toggle("reader-completion-btn--done", readerInkMode);
+  }
+  if (penBtn) {
+    penBtn.style.display = readerInkMode ? "inline-flex" : "none";
+    penBtn.classList.toggle("reader-completion-btn--done", readerInkTool === "pen");
+  }
+  if (markerBtn) {
+    markerBtn.style.display = readerInkMode ? "inline-flex" : "none";
+    markerBtn.classList.toggle("reader-completion-btn--done", readerInkTool === "marker");
+  }
+  if (eraserBtn) {
+    eraserBtn.style.display = readerInkMode ? "inline-flex" : "none";
+    eraserBtn.classList.toggle("reader-completion-btn--done", readerInkTool === "eraser");
+  }
+  if (sizeInput) {
+    sizeInput.style.display = readerInkMode ? "inline-flex" : "none";
+    sizeInput.value = String(readerInkTool === "eraser" ? readerInkEraserSize : readerInkSize);
+  }
+  if (markerAlphaInput) {
+    markerAlphaInput.style.display = (readerInkMode && readerInkTool === "marker") ? "inline-flex" : "none";
+    markerAlphaInput.value = String(readerInkMarkerAlpha);
+  }
+  if (colorInput) {
+    colorInput.style.display = readerInkMode ? "inline-flex" : "none";
+    colorInput.value = readerInkColor;
+    colorInput.disabled = readerInkTool === "eraser";
+  }
+  if (undoBtn) undoBtn.style.display = readerInkMode ? "inline-flex" : "none";
+  if (redoBtn) redoBtn.style.display = readerInkMode ? "inline-flex" : "none";
+  if (stylusBtn) {
+    stylusBtn.style.display = readerInkMode ? "inline-flex" : "none";
+    stylusBtn.classList.toggle("reader-completion-btn--done", !!readerInkStylusOnly);
+    stylusBtn.textContent = readerInkStylusOnly ? "🖊️" : "👆";
+  }
+  if (collapseBtn) {
+    collapseBtn.style.display = readerInkMode ? "inline-flex" : "none";
+    collapseBtn.textContent = readerInkControlsCollapsed ? "⬇️" : "⬆️";
+  }
+  if (presetRed) {
+    presetRed.style.display = readerInkMode ? "inline-flex" : "none";
+    presetRed.classList.toggle("reader-completion-btn--done", readerInkColor.toLowerCase() === "#ef4444");
+  }
+  if (presetBlue) {
+    presetBlue.style.display = readerInkMode ? "inline-flex" : "none";
+    presetBlue.classList.toggle("reader-completion-btn--done", readerInkColor.toLowerCase() === "#2563eb");
+  }
+  if (presetGreen) {
+    presetGreen.style.display = readerInkMode ? "inline-flex" : "none";
+    presetGreen.classList.toggle("reader-completion-btn--done", readerInkColor.toLowerCase() === "#16a34a");
+  }
+  if (hint) hint.style.display = readerInkMode ? "inline" : "none";
+  if (readerInkCanvas) {
+    readerInkCanvas.style.pointerEvents = readerInkMode ? "auto" : "none";
+    readerInkCanvas.style.cursor = readerInkMode ? (readerInkTool === "eraser" ? "cell" : "crosshair") : "default";
+  }
+  if (controlsWrap) {
+    controlsWrap.querySelectorAll("button").forEach((el) => {
+      if (el.classList && (el.classList.contains("toolbar-btn") || el.classList.contains("secondary-btn"))) {
+        el.style.padding = "4px 6px";
+        el.style.minWidth = "32px";
+        el.style.height = "32px";
+      }
+    });
+    controlsWrap.querySelectorAll("[data-ink-role='main']").forEach((el) => {
+      el.style.display = readerInkMode ? "none" : "";
+    });
+    controlsWrap.querySelectorAll("[data-ink-role='tool']").forEach((el) => {
+      if (el.id === "reader-ink-toggle-btn") {
+        el.style.display = "";
+      } else if (el.id === "reader-ink-collapse-btn") {
+        el.style.display = readerInkMode ? "inline-flex" : "none";
+      } else if (el.id === "reader-ink-marker-alpha") {
+        el.style.display = (readerInkMode && !readerInkControlsCollapsed && readerInkTool === "marker") ? "inline-flex" : "none";
+      } else if (el.id === "reader-ink-export-png-btn" || el.id === "reader-ink-export-pdf-btn") {
+        el.style.display = readerInkMode ? "inline-flex" : "none";
+      } else if (readerInkControlsCollapsed) {
+        el.style.display = "none";
+      } else {
+        el.style.display = readerInkMode ? "inline-flex" : "none";
+      }
+    });
+  }
+}
+
+function setupReaderInkCanvas(rawText) {
+  const host = document.getElementById("reader-content-wrap");
+  const canvas = document.getElementById("reader-ink-canvas");
+  if (!host || !canvas) return;
+  const ratio = Math.max(1, window.devicePixelRatio || 1);
+  const w = Math.max(320, Math.ceil(host.clientWidth || 320));
+  const h = Math.max(220, Math.ceil(host.scrollHeight || 220));
+  canvas.width = Math.floor(w * ratio);
+  canvas.height = Math.floor(h * ratio);
+  canvas.style.width = `${w}px`;
+  canvas.style.height = `${h}px`;
+  canvas.style.position = "absolute";
+  canvas.style.left = "0";
+  canvas.style.top = "0";
+  canvas.style.zIndex = "8";
+  canvas.style.background = "transparent";
+  canvas.style.touchAction = "none";
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = readerInkSize;
+  ctx.strokeStyle = readerInkColor;
+  const dataUrl = loadReaderInkSnapshot(rawText);
+  if (dataUrl) {
+    const img = new Image();
+    img.onload = function () { ctx.drawImage(img, 0, 0, w, h); };
+    img.src = dataUrl;
+  }
+  readerInkCtx = ctx;
+  readerInkCanvas = canvas;
+  readerInkRawTextKey = String(rawText || "");
+  readerInkHistory = [];
+  readerInkRedo = [];
+  pushReaderInkHistorySnapshot();
+
+  const getPos = (e) => {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  canvas.onpointerdown = function (e) {
+    if (!readerInkMode) return;
+    if (readerInkStylusOnly && e.pointerType !== "pen") return;
+    readerInkPointerDown = true;
+    readerInkLastPoint = getPos(e);
+    pushReaderInkHistorySnapshot();
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+    e.preventDefault();
+  };
+  canvas.onpointermove = function (e) {
+    if (!readerInkMode || !readerInkPointerDown || !readerInkCtx) return;
+    if (readerInkStylusOnly && e.pointerType !== "pen") return;
+    const p = getPos(e);
+    readerInkCtx.beginPath();
+    readerInkCtx.globalCompositeOperation = readerInkTool === "eraser" ? "destination-out" : "source-over";
+    readerInkCtx.strokeStyle = readerInkColor;
+    if (readerInkTool === "marker") {
+      readerInkCtx.globalAlpha = readerInkMarkerAlpha;
+      readerInkCtx.lineWidth = Math.max(8, readerInkSize * 3.2);
+    } else {
+      readerInkCtx.globalAlpha = 1;
+      readerInkCtx.lineWidth = readerInkTool === "eraser" ? readerInkEraserSize : readerInkSize;
+    }
+    readerInkCtx.moveTo(readerInkLastPoint.x, readerInkLastPoint.y);
+    readerInkCtx.lineTo(p.x, p.y);
+    readerInkCtx.stroke();
+    readerInkCtx.globalAlpha = 1;
+    readerInkLastPoint = p;
+    e.preventDefault();
+  };
+  const endDraw = function (e) {
+    if (!readerInkMode) return;
+    if (readerInkPointerDown) {
+      pushReaderInkHistorySnapshot();
+      saveReaderInkSnapshot(readerInkRawTextKey);
+    }
+    readerInkPointerDown = false;
+    readerInkLastPoint = null;
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+  };
+  canvas.onpointerup = endDraw;
+  canvas.onpointercancel = endDraw;
+  setReaderInkUiState();
+}
+
+window.toggleReaderInkMode = function () {
+  readerInkMode = !readerInkMode;
+  if (!readerInkMode) readerInkControlsCollapsed = false;
+  setReaderInkUiState();
+  if (readerInkMode) showToastMessage("✏️ Kalem modu açık.");
+  else showToastMessage("📖 Okuma modu açık.");
+};
+
+window.toggleReaderInkControlsCollapsed = function () {
+  readerInkControlsCollapsed = !readerInkControlsCollapsed;
+  setReaderInkUiState();
+};
+
+window.setReaderInkTool = function (tool) {
+  if (tool === "eraser" || tool === "marker") readerInkTool = tool;
+  else readerInkTool = "pen";
+  setReaderInkUiState();
+};
+
+window.setReaderInkColor = function (color) {
+  readerInkColor = String(color || "#ef4444");
+  localStorage.setItem("y_reader_ink_color", readerInkColor);
+  setReaderInkUiState();
+};
+
+window.setReaderInkPresetColor = function (color) {
+  window.setReaderInkColor(color);
+  const colorInput = document.getElementById("reader-ink-color");
+  if (colorInput) colorInput.value = readerInkColor;
+};
+
+window.setReaderInkSize = function (sizeVal) {
+  const n = Number(sizeVal || 2.2);
+  if (!Number.isFinite(n)) return;
+  if (readerInkTool === "eraser") {
+    readerInkEraserSize = Math.max(6, Math.min(48, n));
+    localStorage.setItem("y_reader_ink_eraser_size", String(readerInkEraserSize));
+  } else {
+    readerInkSize = Math.max(1, Math.min(18, n));
+    localStorage.setItem("y_reader_ink_size", String(readerInkSize));
+  }
+  setReaderInkUiState();
+};
+
+window.setReaderInkMarkerAlpha = function (alphaVal) {
+  const n = Number(alphaVal);
+  if (!Number.isFinite(n)) return;
+  readerInkMarkerAlpha = Math.max(0.05, Math.min(0.45, n));
+  localStorage.setItem("y_reader_ink_marker_alpha", String(readerInkMarkerAlpha));
+  setReaderInkUiState();
+};
+
+window.toggleReaderInkStylusOnly = function () {
+  readerInkStylusOnly = !readerInkStylusOnly;
+  localStorage.setItem("y_reader_ink_stylus_only", readerInkStylusOnly ? "1" : "0");
+  setReaderInkUiState();
+};
+
+window.undoReaderInk = function () {
+  if (!readerInkCanvas || readerInkHistory.length < 2) return;
+  const current = readerInkHistory.pop();
+  if (current) readerInkRedo.push(current);
+  const prev = readerInkHistory[readerInkHistory.length - 1] || "";
+  applyReaderInkSnapshot(prev);
+  saveReaderInkSnapshot(readerInkRawTextKey);
+};
+
+window.redoReaderInk = function () {
+  if (!readerInkCanvas || !readerInkRedo.length) return;
+  const next = readerInkRedo.pop();
+  if (!next) return;
+  applyReaderInkSnapshot(next);
+  readerInkHistory.push(next);
+  saveReaderInkSnapshot(readerInkRawTextKey);
+};
+
+window.clearReaderInk = function () {
+  if (!readerInkCanvas || !readerInkCtx) return;
+  pushReaderInkHistorySnapshot();
+  readerInkCtx.clearRect(0, 0, readerInkCanvas.width, readerInkCanvas.height);
+  pushReaderInkHistorySnapshot();
+  saveReaderInkSnapshot(readerInkRawTextKey);
+  showToastMessage("🧽 Ekran notları temizlendi.");
+};
+
+function captureReaderContentCanvas() {
+  const readerRoot = document.getElementById("reader-content-wrap");
+  if (!readerRoot) return Promise.reject(new Error("no-content"));
+  if (readerInkPointerDown) {
+    // Cizim devam ederken export alinirsa son stroke da gorunsun.
+    try { saveReaderInkSnapshot(readerInkRawTextKey); } catch (e) {}
+  }
+  const w = Math.max(320, Math.ceil(readerRoot.clientWidth || 320));
+  const h = Math.max(240, Math.ceil(readerRoot.scrollHeight || 240));
+  const pad = 28;
+  const scale = 2;
+  const clone = readerRoot.cloneNode(true);
+  clone.setAttribute("xmlns", "http://www.w3.org/1999/xhtml");
+  clone.style.width = w + "px";
+  clone.style.height = h + "px";
+  clone.style.background = getComputedStyle(readerRoot).backgroundColor || "#ffffff";
+
+  const inlineStylesRecursively = function (src, dst) {
+    if (!src || !dst || src.nodeType !== 1 || dst.nodeType !== 1) return;
+    try {
+      const cs = window.getComputedStyle(src);
+      const keep = [
+        "display","position","left","top","right","bottom","width","height","min-width","min-height","max-width","max-height",
+        "margin","margin-top","margin-right","margin-bottom","margin-left",
+        "padding","padding-top","padding-right","padding-bottom","padding-left",
+        "border","border-top","border-right","border-bottom","border-left","border-radius",
+        "background","background-color","background-image","background-size","background-position",
+        "box-shadow","opacity","z-index","overflow","overflow-x","overflow-y",
+        "font","font-size","font-family","font-weight","font-style","line-height","letter-spacing",
+        "color","text-align","text-decoration","white-space","word-break","word-wrap",
+        "transform","transform-origin","vertical-align"
+      ];
+      let cssText = "";
+      keep.forEach((k) => {
+        const v = cs.getPropertyValue(k);
+        if (v) cssText += `${k}:${v};`;
+      });
+      dst.setAttribute("style", (dst.getAttribute("style") || "") + ";" + cssText);
+    } catch (e) {}
+    const srcChildren = src.children || [];
+    const dstChildren = dst.children || [];
+    const n = Math.min(srcChildren.length, dstChildren.length);
+    for (let i = 0; i < n; i++) inlineStylesRecursively(srcChildren[i], dstChildren[i]);
+  };
+  inlineStylesRecursively(readerRoot, clone);
+
+  const originalCanvases = Array.from(readerRoot.querySelectorAll("canvas"));
+  const clonedCanvases = Array.from(clone.querySelectorAll("canvas"));
+  clonedCanvases.forEach((cv, idx) => {
+    try {
+      const srcCanvas = originalCanvases[idx];
+      const url = srcCanvas ? srcCanvas.toDataURL("image/png") : "";
+      if (!url) return;
+      const imgEl = document.createElement("img");
+      imgEl.src = url;
+      const srcStyle = srcCanvas ? window.getComputedStyle(srcCanvas) : window.getComputedStyle(cv);
+      imgEl.style.width = srcStyle.width || cv.style.width || cv.width + "px";
+      imgEl.style.height = srcStyle.height || cv.style.height || cv.height + "px";
+      imgEl.style.position = srcStyle.position || cv.style.position || "absolute";
+      imgEl.style.left = srcStyle.left || cv.style.left || "0";
+      imgEl.style.top = srcStyle.top || cv.style.top || "0";
+      imgEl.style.zIndex = srcStyle.zIndex || cv.style.zIndex || "8";
+      cv.replaceWith(imgEl);
+    } catch (e) {}
+  });
+
+  const xhtml = new XMLSerializer().serializeToString(clone);
+  const svgW = w + pad * 2;
+  const svgH = h + pad * 2;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${svgW * scale}" height="${svgH * scale}" viewBox="0 0 ${svgW} ${svgH}"><rect x="0" y="0" width="${svgW}" height="${svgH}" fill="#ffffff"/><foreignObject x="${pad}" y="${pad}" width="${w}" height="${h}">${xhtml}</foreignObject></svg>`;
+  const data = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = function () {
+      const c = document.createElement("canvas");
+      c.width = Math.floor(svgW * scale);
+      c.height = Math.floor(svgH * scale);
+      const x = c.getContext("2d");
+      if (!x) return reject(new Error("no-ctx"));
+      x.fillStyle = "#ffffff";
+      x.fillRect(0, 0, c.width, c.height);
+      x.drawImage(img, 0, 0, c.width, c.height);
+      resolve(c);
+    };
+    img.onerror = function () { reject(new Error("img-load")); };
+    img.src = data;
+  });
+}
+
+window.exportReaderInkImage = function (format) {
+  const mime = format === "jpeg" ? "image/jpeg" : "image/png";
+  const quality = format === "jpeg" ? 0.92 : 1;
+  captureReaderContentCanvas()
+    .then(function (c) {
+      const out = c.toDataURL(mime, quality);
+      const a = document.createElement("a");
+      a.href = out;
+      a.download = `okuma-notlari-${Date.now()}.${format === "jpeg" ? "jpg" : "png"}`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      showToastMessage(format === "jpeg" ? "🖼️ JPEG dışa aktarıldı." : "🖼️ PNG dışa aktarıldı.");
+    })
+    .catch(function () {
+      showToastMessage("Dışa aktarma başarısız. Lütfen tekrar deneyin.");
+    });
+};
+
+window.exportReaderInkPdf = function () {
+  captureReaderContentCanvas()
+    .then(function (c) {
+      const out = c.toDataURL("image/png");
+      const win = window.open("", "_blank");
+      if (!win) {
+        showToastMessage("Popup engellendi. Tarayıcı izinlerini kontrol edin.");
+        return;
+      }
+      win.document.write(`<html><head><title>Okuma Notları PDF</title></head><body style="margin:0; background:#fff;"><img src="${out}" style="width:100%; height:auto; display:block;"></body></html>`);
+      win.document.close();
+      setTimeout(function () { win.print(); }, 400);
+    })
+    .catch(function () {
+      showToastMessage("PDF hazırlığı başarısız.");
+    });
+};
+
+window.toggleReaderNotesPanel = function () {
+  readerNotesPanelOpen = !readerNotesPanelOpen;
+  const panel = document.getElementById("reader-notes-panel");
+  if (panel) panel.style.display = readerNotesPanelOpen ? "block" : "none";
+  if (readerNotesPanelOpen) window.renderReaderNotesPanel();
+};
+
+window.renderReaderNotesPanel = function () {
+  const panel = document.getElementById("reader-notes-panel");
+  if (!panel) return;
+  const notes = getCurrentReaderNotes();
+  const listHtml = notes.length
+    ? notes.map((n, idx) => {
+        const quote = String(n.quote || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const body = String(n.note || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        const dt = new Date(Number(n.updatedAt || n.createdAt || Date.now())).toLocaleString("tr-TR");
+        return `<div style="border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px; background:var(--surface);">
+          ${quote ? `<div style="font-size:0.85rem; color:var(--accent2); margin-bottom:6px;">“${quote}”</div>` : ""}
+          <div style="white-space:pre-wrap; color:var(--text); line-height:1.5;">${body}</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+            <small style="color:var(--text-dim);">${dt}</small>
+            <button class="secondary-btn" style="padding:5px 8px; font-size:0.78rem; border-color:var(--error); color:var(--error);" onclick="deleteReaderNoteByIndex(${idx})">Sil</button>
+          </div>
+        </div>`;
+      }).join("")
+    : `<div style="color:var(--text-dim); font-size:0.9rem;">Henüz not yok. Metinden seçim yapıp not düşebilirsiniz.</div>`;
+  const selectedText = (window.lastReaderSelectionMeta && window.lastReaderSelectionMeta.text) ? window.lastReaderSelectionMeta.text : "";
+  panel.innerHTML = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <button class="toolbar-btn" onclick="saveReaderNoteFromComposer()" title="Aşağıdaki notu kaydet">💾 Notu Kaydet</button>
+      <button class="toolbar-btn" onclick="prefillReaderNoteFromSelection()" title="Seçili metni alıntıya taşı">✍️ Seçimi Ekle</button>
+      <button class="toolbar-btn" onclick="clearReaderNoteComposer()" title="Not alanını temizle">🧹 Temizle</button>
+    </div>
+    <input id="reader-note-quote" class="auth-input" style="margin-bottom:8px; padding:10px;" placeholder="Alıntı (opsiyonel)" value="${String(selectedText).replace(/"/g, "&quot;")}">
+    <textarea id="reader-note-body" class="auth-input" style="min-height:100px; padding:10px; margin-bottom:10px; resize:vertical;" placeholder="Bu kelime/cümle hakkında notunuz..."></textarea>
+    <div style="max-height:260px; overflow:auto; padding-right:4px;">${listHtml}</div>
+  `;
+};
+
+window.prefillReaderNoteFromSelection = function () {
+  const quoteInput = document.getElementById("reader-note-quote");
+  if (!quoteInput) return;
+  const txt = (window.lastReaderSelectionMeta && window.lastReaderSelectionMeta.text) || String(window.getSelection?.() || "").trim();
+  if (!txt) {
+    showToastMessage("Önce metinden bir kelime/cümle seçin.");
+    return;
+  }
+  quoteInput.value = txt;
+};
+
+window.clearReaderNoteComposer = function () {
+  const quoteInput = document.getElementById("reader-note-quote");
+  const bodyInput = document.getElementById("reader-note-body");
+  if (quoteInput) quoteInput.value = "";
+  if (bodyInput) bodyInput.value = "";
+};
+
+window.saveReaderNoteFromComposer = function () {
+  const quoteInput = document.getElementById("reader-note-quote");
+  const bodyInput = document.getElementById("reader-note-body");
+  const quote = String(quoteInput?.value || "").trim();
+  const note = String(bodyInput?.value || "").trim();
+  if (!quote && !note) {
+    showToastMessage("Not için metin yazın.");
+    return;
+  }
+  const now = Date.now();
+  const payload = {
+    id: `rn_${now}_${Math.random().toString(36).slice(2, 7)}`,
+    quote,
+    note,
+    createdAt: now,
+    updatedAt: now,
+  };
+  if (!upsertCurrentReaderNote(payload)) {
+    showToastMessage("Önce bir metin yükleyin.");
+    return;
+  }
+  if (bodyInput) bodyInput.value = "";
+  showToastMessage("📝 Not kaydedildi (bu cihazda).");
+  window.renderReaderNotesPanel();
+};
+
+window.deleteReaderNoteByIndex = function (idx) {
+  const notes = getCurrentReaderNotes();
+  if (!Array.isArray(notes) || idx < 0 || idx >= notes.length) return;
+  const note = notes[idx];
+  if (!note || !note.id) return;
+  deleteCurrentReaderNote(note.id);
+  window.renderReaderNotesPanel();
+};
+
+window.toggleReaderNotebookPanel = function () {
+  readerNotebookPanelOpen = !readerNotebookPanelOpen;
+  const panel = document.getElementById("reader-notebook-panel");
+  if (!panel) return;
+  panel.style.display = readerNotebookPanelOpen ? "block" : "none";
+  if (readerNotebookPanelOpen && typeof window.renderReaderNotebookPanel === "function") {
+    window.renderReaderNotebookPanel();
+  }
+};
+
+window.renderReaderNotebookPanel = function () {
+  const panel = document.getElementById("reader-notebook-panel");
+  if (!panel) return;
+  const data = getCurrentReaderNotebook();
+  panel.innerHTML = `
+    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+      <button class="toolbar-btn" onclick="saveReaderNotebookText()" title="Defter yazısını kaydet">💾 Defteri Kaydet</button>
+      <button class="toolbar-btn" onclick="clearReaderNotebookText()" title="Yazı alanını temizle">🧹 Metni Temizle</button>
+      <button class="toolbar-btn" onclick="clearReaderNotebookDrawing()" title="Çizimi temizle">🧽 Çizimi Sil</button>
+      <small style="color:var(--text-dim); align-self:center;">Bu defter bu cihazda saklanır.</small>
+    </div>
+    <textarea id="reader-notebook-text" class="auth-input" style="min-height:180px; padding:10px; margin-bottom:10px; resize:vertical;" placeholder="Buraya serbest not alabilirsiniz...">${String(data.text || "").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</textarea>
+    <div style="border:1px dashed var(--border); border-radius:10px; padding:8px; background:var(--surface);">
+      <canvas id="reader-notebook-canvas" style="display:block; width:100%; height:260px; border-radius:8px; background:#fff; touch-action:none;"></canvas>
+    </div>
+  `;
+  if (typeof window.initReaderNotebookCanvas === "function") {
+    window.initReaderNotebookCanvas(data.drawingDataUrl || "");
+  }
+};
+
+window.saveReaderNotebookText = function () {
+  const ta = document.getElementById("reader-notebook-text");
+  if (!ta) return;
+  const ok = saveCurrentReaderNotebookPatch({ text: String(ta.value || "") });
+  if (!ok) {
+    showToastMessage("Önce bir metin yükleyin.");
+    return;
+  }
+  showToastMessage("📓 Defter kaydedildi.");
+};
+
+window.clearReaderNotebookText = function () {
+  const ta = document.getElementById("reader-notebook-text");
+  if (ta) ta.value = "";
+  const ok = saveCurrentReaderNotebookPatch({ text: "" });
+  if (ok) showToastMessage("Defter metni temizlendi.");
+};
+
+window.clearReaderNotebookDrawing = function () {
+  const c = document.getElementById("reader-notebook-canvas");
+  if (!c) return;
+  const ctx = c.getContext("2d");
+  if (!ctx) return;
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, c.width, c.height);
+  saveCurrentReaderNotebookPatch({ drawingDataUrl: c.toDataURL("image/png") });
+  showToastMessage("Defter çizimi temizlendi.");
+};
+
+window.initReaderNotebookCanvas = function (drawingDataUrl) {
+  const canvas = document.getElementById("reader-notebook-canvas");
+  if (!canvas) return;
+  const ratio = Math.max(1, window.devicePixelRatio || 1);
+  const rect = canvas.getBoundingClientRect();
+  const w = Math.max(320, Math.floor(rect.width || 320));
+  const h = Math.max(220, Math.floor(rect.height || 260));
+  canvas.width = Math.floor(w * ratio);
+  canvas.height = Math.floor(h * ratio);
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  ctx.scale(ratio, ratio);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = 2.2;
+  ctx.strokeStyle = "#1f2937";
+  ctx.fillStyle = "#ffffff";
+  ctx.fillRect(0, 0, w, h);
+
+  if (drawingDataUrl) {
+    const img = new Image();
+    img.onload = function () { ctx.drawImage(img, 0, 0, w, h); };
+    img.src = drawingDataUrl;
+  }
+
+  let drawing = false;
+  let lx = 0;
+  let ly = 0;
+  function getPos(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function down(e) {
+    drawing = true;
+    const p = getPos(e);
+    lx = p.x;
+    ly = p.y;
+    try { canvas.setPointerCapture(e.pointerId); } catch (err) {}
+  }
+  function move(e) {
+    if (!drawing) return;
+    const p = getPos(e);
+    ctx.beginPath();
+    ctx.moveTo(lx, ly);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+    lx = p.x;
+    ly = p.y;
+  }
+  function up(e) {
+    if (!drawing) return;
+    drawing = false;
+    saveCurrentReaderNotebookPatch({ drawingDataUrl: canvas.toDataURL("image/png") });
+    try { canvas.releasePointerCapture(e.pointerId); } catch (err) {}
+  }
+  canvas.onpointerdown = down;
+  canvas.onpointermove = move;
+  canvas.onpointerup = up;
+  canvas.onpointercancel = up;
+};
+
+function isReadingCompletionKeyDone(key) {
+  if (!key) return false;
+  const state = getCurrentUserReadingState();
+  if (!state || !state.readingCompletedIds || typeof state.readingCompletedIds !== "object") return false;
+  return Number(state.readingCompletedIds[key] || 0) > 0;
+}
+
+/** Katalog metni: doğrudan sample:id veya bu metinden kaydedilmiş çalışmada saved:rw tamamlandıysa */
+function isLibraryCatalogTextDone(itemId) {
+  if (!itemId || !getCurrentUserReadingState()) return false;
+  if (isReadingCompletionKeyDone(`sample:${itemId}`)) return true;
+  const state = getCurrentUserReadingState();
+  const works = state.readingWorks;
+  if (!Array.isArray(works)) return false;
+  return works.some((w) => {
+    if (!w || w.sourceType !== "sample" || w.sourceId !== itemId) return false;
+    return isReadingCompletionKeyDone(`saved:${w.id}`);
+  });
+}
+
+function setReadingCompletionDone(key, done) {
+  if (!key) return false;
+  const state = getCurrentUserReadingState();
+  if (!state) return false;
+  if (!state.readingCompletedIds || typeof state.readingCompletedIds !== "object") {
+    state.readingCompletedIds = {};
+  }
+  if (done) state.readingCompletedIds[key] = Date.now();
+  else delete state.readingCompletedIds[key];
+  let chain = Promise.resolve();
+  if (typeof syncCloudData === "function") chain = Promise.resolve(syncCloudData());
+  else if (typeof saveDb === "function") chain = Promise.resolve(saveDb());
+  chain.catch(function (err) {
+    console.error("Firestore okuma tamamlama / userdata", err);
+    if (typeof showToastMessage === "function") {
+      showToastMessage(
+        "Tamamlama bu cihazda kaydedildi; buluta yazılamadı. İnternetinizi kontrol edip bir kez daha “Bitirdim”e basın.",
+      );
+    }
+  });
+  return true;
+}
+
+/** Firestore userdata güncellenince okuma tamamlama arayüzünü (buton yeşili, kütüphane tikleri) senkronlar */
+window.refreshReadingCompletionUI = function () {
+  try {
+    if (typeof renderTextLibrary === "function") renderTextLibrary();
+  } catch (e) {}
+  if (typeof renderSavedReadingWorks === "function") renderSavedReadingWorks();
+  const rawText = String(document.getElementById("input-text")?.value || "").trim();
+  const markBtn = document.getElementById("reader-completion-mark-btn");
+  const clearBtn = document.getElementById("reader-completion-clear-btn");
+  if ((!markBtn && !clearBtn) || !rawText) return;
+  const key = readingCompletionKey(currentReadingWorkMeta, rawText);
+  const done = !!(key && isReadingCompletionKeyDone(key));
+  if (markBtn) {
+    markBtn.classList.toggle("reader-completion-btn--done", done);
+    markBtn.textContent = done ? "✓ Tamamlandı" : "✅ Bitirdim";
+    markBtn.title = done
+      ? "Bu metin zaten tamamlandı."
+      : "Bitirdiğiniz metni işaretleyin; okuma listesinde tik görünür (tüm cihazlarda)";
+  }
+  if (clearBtn) {
+    clearBtn.disabled = !done;
+    clearBtn.title = done
+      ? "Tamamlandı işaretini kaldır"
+      : "Önce metni Bitirdim ile işaretleyin";
+  }
+};
+
+function getCurrentReadingCompletionContext() {
+  if (!currentUser || !currentUsername) {
+    if (typeof showAuthModal === "function") showAuthModal(true);
+    showToastMessage("Bu işlemi kaydetmek için giriş yapın.");
+    return null;
+  }
+  const rawText = String(document.getElementById("input-text")?.value || "").trim();
+  if (!rawText) {
+    showToastMessage("Önce bir metin yükleyin.");
+    return null;
+  }
+  const key = readingCompletionKey(currentReadingWorkMeta, rawText);
+  if (!key) {
+    showToastMessage("Bu metin için tamamlama anahtarı oluşturulamadı.");
+    return null;
+  }
+  return { key: key };
+}
+
+window.markCurrentReadingCompleted = function () {
+  const ctx = getCurrentReadingCompletionContext();
+  if (!ctx) return;
+  if (isReadingCompletionKeyDone(ctx.key)) {
+    showToastMessage("Bu metin zaten tamamlandı.");
+    if (typeof window.refreshReadingCompletionUI === "function") window.refreshReadingCompletionUI();
+    return;
+  }
+  setReadingCompletionDone(ctx.key, true);
+  if (typeof window.refreshReadingCompletionUI === "function") window.refreshReadingCompletionUI();
+  showToastMessage("✅ Metin tamamlandı olarak işaretlendi.");
+};
+
+window.clearCurrentReadingCompleted = function () {
+  const ctx = getCurrentReadingCompletionContext();
+  if (!ctx) return;
+  if (!isReadingCompletionKeyDone(ctx.key)) {
+    showToastMessage("Bu metin zaten işaretli değil.");
+    if (typeof window.refreshReadingCompletionUI === "function") window.refreshReadingCompletionUI();
+    return;
+  }
+  setReadingCompletionDone(ctx.key, false);
+  if (typeof window.refreshReadingCompletionUI === "function") window.refreshReadingCompletionUI();
+  showToastMessage("Tamamlama işareti kaldırıldı.");
+};
 
 function getCurrentReaderTokenCount() {
   if (!Array.isArray(allWordSpans)) return 0;
@@ -659,7 +1604,7 @@ function getReadingHighlightStore() {
   ) {
     try {
       window._localReadingHighlights = JSON.parse(
-        localStorage.getItem(appStoreKey("reading_highlights")) || "{}",
+        localStorage.getItem("y_reading_highlights") || "{}",
       );
     } catch (e) {
       window._localReadingHighlights = {};
@@ -680,7 +1625,7 @@ function persistReadingHighlightStore() {
   } else {
     try {
       localStorage.setItem(
-        appStoreKey("reading_highlights"),
+        "y_reading_highlights",
         JSON.stringify(window._localReadingHighlights || {}),
       );
     } catch (e) {}
@@ -728,6 +1673,14 @@ function applySavedHighlightsToReader(rawText) {
   });
 }
 
+/** Buluttan yeni highlight geldiğinde açık okuma metnindeki vurguları yeniden uygular */
+window.refreshCurrentReadingHighlightsUI = function () {
+  const text = String(document.getElementById("input-text")?.value || "").trim();
+  if (!text || !Array.isArray(allWordSpans) || !allWordSpans.length) return;
+  allWordSpans.forEach((span) => span.classList.remove("highlighted"));
+  applySavedHighlightsToReader(text);
+};
+
 /**
  * Kelime vurgusu (modal) — data-start/data-end ile kalıcı kayıt
  */
@@ -761,8 +1714,156 @@ window.syncReadingHighlightToStorageForElement = function (el, isHighlighted) {
   updateReadingHighlightRange(rawText, start, end, !!isHighlighted);
 };
 
+function normalizeGrammarSearchText(text) {
+  return String(text || "")
+    .toLocaleLowerCase("tr-TR")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9\u0370-\u03ff\s]/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildLessonScore(lesson, queryTerms) {
+  if (!lesson || !Array.isArray(queryTerms) || !queryTerms.length) return 0;
+  const title = normalizeGrammarSearchText(lesson.title || "");
+  const category = normalizeGrammarSearchText(lesson.category || "");
+  const content = normalizeGrammarSearchText(String(lesson.content || "").replace(/<[^>]*>/g, " "));
+  let score = 0;
+  queryTerms.forEach((term) => {
+    if (!term || term.length < 2) return;
+    if (title.includes(term)) score += 8;
+    if (category.includes(term)) score += 5;
+    if (content.includes(term)) score += 2;
+  });
+  return score;
+}
+
+function detectGrammarTopicHeuristic(text) {
+  const src = String(text || "");
+  const lower = src.toLocaleLowerCase("en-US");
+  const rules = [
+    { key: "μέλλοντας θα", score: (lower.match(/\bθα\b/g) || []).length * 3 },
+    { key: "υποτακτική να", score: (lower.match(/\bνα\b/g) || []).length * 3 },
+    { key: "παρατατικός", score: (lower.match(/\b(ήταν|ήμουν|ήσουν|ήμασταν|ήσασταν)\b/g) || []).length * 2 },
+    { key: "άρθρα", score: (lower.match(/\b(ο|η|το|οι|τα|τον|την|τους|τις)\b/g) || []).length },
+    { key: "προθέσεις", score: (lower.match(/\b(σε|με|για|από|προς|χωρίς)\b/g) || []).length },
+  ];
+  rules.sort((a, b) => b.score - a.score);
+  const top = rules[0];
+  if (!top || top.score <= 0) return { query: "γραμματική", reason: "Γενική αντιστοίχιση γραμματικής" };
+  return { query: top.key, reason: `Ανίχνευση κανόνα: ${top.key}` };
+}
+
+window.findBestLessonMatch = function (query) {
+  const lessons = Array.isArray(window.GLOBAL_LESSONS) ? window.GLOBAL_LESSONS : [];
+  if (!lessons.length) return null;
+  const terms = normalizeGrammarSearchText(query)
+    .split(" ")
+    .filter((t) => t.length >= 2);
+  if (!terms.length) return null;
+  let best = null;
+  let bestScore = -1;
+  lessons.forEach((lesson) => {
+    const s = buildLessonScore(lesson, terms);
+    if (s > bestScore) {
+      best = lesson;
+      bestScore = s;
+    }
+  });
+  return bestScore > 0 ? best : null;
+};
+
+window.runGrammarTopicAnalysis = async function (text) {
+  const rawText = String(text || "").trim();
+  if (!rawText) return detectGrammarTopicHeuristic(rawText);
+
+  const apiKey = (localStorage.getItem("gemini_api_key") || "").trim();
+  if (!apiKey) return detectGrammarTopicHeuristic(rawText);
+
+  try {
+    const prompt = `
+Βρες τα κυρίαρχα γραμματικά θέματα του παρακάτω ελληνικού κειμένου.
+Επέστρεψε ΜΟΝΟ έγκυρο JSON:
+{
+  "primaryTopicGreek": "σύντομο όνομα θέματος στα ελληνικά",
+  "searchQueryGreek": "σύντομο ερώτημα αναζήτησης στα ελληνικά",
+  "reasonTurkish": "tek cümle Türkçe açıklama"
+}
+Κανόνες:
+- Τα πεδία primaryTopicGreek ve searchQueryGreek ΠΡΕΠΕΙ να είναι ελληνικά (όχι τουρκικά/αγγλικά).
+- searchQueryGreek en fazla 2-4 kelime olsun.
+
+Κείμενο:
+${rawText.slice(0, 7000)}
+`;
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+      }),
+    });
+    const data = await res.json();
+    const outputText = (((data || {}).candidates || [])[0] || {}).content?.parts?.[0]?.text || "";
+    const clean = String(outputText).replace(/```json/gi, "").replace(/```/g, "").trim();
+    const parsed = JSON.parse(clean);
+    const q = String(parsed.searchQueryGreek || parsed.primaryTopicGreek || "").trim();
+    if (!q) return detectGrammarTopicHeuristic(rawText);
+    return {
+      query: q,
+      reason: String(parsed.reasonTurkish || parsed.primaryTopicGreek || "AI analiz sonucu"),
+    };
+  } catch (e) {
+    console.error("runGrammarTopicAnalysis", e);
+    return detectGrammarTopicHeuristic(rawText);
+  }
+};
+
+window.goToGrammarForCurrentReadingText = async function () {
+  const rawText = String(document.getElementById("input-text")?.value || "").trim();
+  if (!rawText) {
+    showToastMessage("Önce okuma metni yükleyin.");
+    return;
+  }
+
+  const btn = document.querySelector('.reader-toolbar-right .toolbar-btn[onclick*="goToGrammarForCurrentReadingText"]');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "🧠 Analiz...";
+  }
+
+  try {
+    const analysis = await window.runGrammarTopicAnalysis(rawText);
+    const query = String((analysis && analysis.query) || "").trim() || "gramer";
+    const matchedLesson = (typeof window.findBestLessonMatch === "function")
+      ? window.findBestLessonMatch(query)
+      : null;
+
+    if (typeof switchMainTab === "function") switchMainTab("lessons");
+    const searchInput = document.getElementById("lesson-search-input");
+    if (searchInput) searchInput.value = query;
+    if (typeof window.renderLessonLibrary === "function") window.renderLessonLibrary(query);
+
+    if (matchedLesson && typeof window.openLesson === "function") {
+      window.openLesson(matchedLesson.id);
+      showToastMessage(`🧭 ${analysis.reason || "Gramer konusu bulundu"} → ${matchedLesson.title}`);
+    } else {
+      showToastMessage(`🧭 ${analysis.reason || "Gramer konusu bulundu"} (Arama: ${query})`);
+    }
+  } catch (e) {
+    console.error("goToGrammarForCurrentReadingText", e);
+    showToastMessage("❌ Gramer analizi sırasında hata oluştu.");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "🧠 Gramere Git";
+    }
+  }
+};
+
 function processAndRenderText() {
-  const rawText = document.getElementById("input-text").value;
+  const rawText = sanitizeTextForEnglishLearning(document.getElementById("input-text").value);
   if (!rawText.trim()) {
     showToastMessage("Lütfen işlenecek bir metin girin.");
     return;
@@ -771,35 +1872,81 @@ function processAndRenderText() {
   readerDiv.innerHTML = "";
   readerDiv.style.display = "block";
 
+  const completionKey = readingCompletionKey(currentReadingWorkMeta, rawText);
+  const completionDone = completionKey && isReadingCompletionKeyDone(completionKey);
+  const completionBtnClass = completionDone ? "toolbar-btn reader-completion-btn--done" : "toolbar-btn";
+  const completionLabel = completionDone ? "✓ Tamamlandı" : "✅ Bitirdim";
+  const completionTitle = completionDone
+    ? "Bu metin zaten tamamlandı."
+    : "Bitirdiğiniz metni işaretleyin; okuma listesinde tik görünür (tüm cihazlarda)";
+  const completionTitleAttr = String(completionTitle).replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  const clearDisabledAttr = completionDone ? "" : "disabled";
+
   const toolbar = document.createElement("div");
   toolbar.className = "reader-toolbar";
   toolbar.innerHTML = `
     <div class="reader-toolbar-left">📖 Kelimeye tıkla → çeviri + telaffuz</div>
     <div class="reader-toolbar-right">
-      <button class="toolbar-btn tts-toolbar-btn" onclick="speakAllText()" title="Tüm metni sesli oku">🔊 Oku</button>
-      <button class="toolbar-btn tts-toolbar-btn" onclick="togglePauseSpeech()" title="Duraklat/Devam Et">⏸ Duraklat</button>
-      <button class="toolbar-btn" onclick="stopSpeech()" title="Seslendirmeyi durdur">⏹ Durdur</button>
-      <button class="toolbar-btn" onclick="adjustReaderFontSize(-0.1)" title="Yazıyı küçült">A-</button>
-      <button class="toolbar-btn" onclick="adjustReaderFontSize(0.1)" title="Yazıyı büyüt">A+</button>
-      <button class="toolbar-btn" onclick="persistCurrentReadingState()" title="Okuma değişikliklerini kalıcı kaydet">💾 Değişiklikleri Kaydet</button>
-    <button class="secondary-btn" onclick="clearReader()" style="border-color:var(--error); color:var(--error); padding: 5px 10px; font-size: 0.85rem; margin-left: 5px;" title="Okuma alanını temizle">🗑️ Temizle</button>
+      <button class="toolbar-btn tts-toolbar-btn" data-ink-role="main" onclick="speakAllText()" title="Tüm metni sesli oku">🔊</button>
+      <button class="toolbar-btn tts-toolbar-btn" data-ink-role="main" onclick="togglePauseSpeech()" title="Duraklat/Devam Et">⏸️</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="stopSpeech()" title="Seslendirmeyi durdur">⏹️</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="adjustReaderFontSize(-0.1)" title="Yazıyı küçült">A-</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="adjustReaderFontSize(0.1)" title="Yazıyı büyüt">A+</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="goToGrammarForCurrentReadingText()" title="Metni analiz edip uygun konu anlatımına git">🧠</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-toggle-btn" onclick="toggleReaderInkMode()" title="Kalem modunu aç/kapat">✏️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-collapse-btn" onclick="toggleReaderInkControlsCollapsed()" style="display:none;" title="Araçları gizle/aç">⬆️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-pen-btn" onclick="setReaderInkTool('pen')" style="display:none;" title="Kalem">🖊️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-marker-btn" onclick="setReaderInkTool('marker')" style="display:none;" title="Fosforlu">🖍️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-eraser-btn" onclick="setReaderInkTool('eraser')" style="display:none;" title="Silgi">🩹</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-preset-red" onclick="setReaderInkPresetColor('#ef4444')" style="display:none;" title="Kırmızı">🔴</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-preset-blue" onclick="setReaderInkPresetColor('#2563eb')" style="display:none;" title="Mavi">🔵</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-preset-green" onclick="setReaderInkPresetColor('#16a34a')" style="display:none;" title="Yeşil">🟢</button>
+      <input id="reader-ink-color" data-ink-role="tool" type="color" style="display:none; width:34px; height:30px; padding:0; border:1px solid var(--border); border-radius:6px; background:transparent;" onchange="setReaderInkColor(this.value)" title="Renk">
+      <input id="reader-ink-size" data-ink-role="tool" type="range" min="1" max="24" step="0.2" style="display:none; width:90px;" onchange="setReaderInkSize(this.value)" title="Kalınlık">
+      <input id="reader-ink-marker-alpha" data-ink-role="tool" type="range" min="0.05" max="0.45" step="0.01" style="display:none; width:90px;" onchange="setReaderInkMarkerAlpha(this.value)" title="Fosfor şeffaflık">
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-stylus-btn" onclick="toggleReaderInkStylusOnly()" style="display:none;" title="Parmak/Kalem modu">🖊️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-undo-btn" onclick="undoReaderInk()" style="display:none;" title="Geri al">↶</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-redo-btn" onclick="redoReaderInk()" style="display:none;" title="İleri al">↷</button>
+      <button class="toolbar-btn" data-ink-role="tool" onclick="clearReaderInk()" title="Bu metindeki çizimleri temizle">🧽</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-export-png-btn" onclick="exportReaderInkImage('png')" title="PNG dışa aktar">🖼️</button>
+      <button class="toolbar-btn" data-ink-role="tool" id="reader-ink-export-pdf-btn" onclick="exportReaderInkPdf()" title="PDF dışa aktar">📄</button>
+      <span id="reader-ink-hint" data-ink-role="tool" style="display:none; color:var(--text-dim); font-size:0.8rem;">Kalem açık: metin tıklamaları geçici kapalı</span>
+      <button class="toolbar-btn" data-ink-role="main" onclick="toggleReaderNotesPanel()" title="Kelime/cümle notlarını aç">📝</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="toggleReaderNotebookPanel()" title="Serbest defter alanını aç">📓</button>
+      <button class="toolbar-btn" data-ink-role="main" onclick="persistCurrentReadingState()" title="Okuma değişikliklerini kalıcı kaydet">💾</button>
+      <button class="${completionBtnClass}" data-ink-role="main" id="reader-completion-mark-btn" onclick="markCurrentReadingCompleted()" title="${completionTitleAttr}">${completionDone ? "✅" : "☑️"}</button>
+      <button class="toolbar-btn" data-ink-role="main" id="reader-completion-clear-btn" onclick="clearCurrentReadingCompleted()" ${clearDisabledAttr} title="Tamamlandı işaretini kaldır">↩️</button>
+    <button class="secondary-btn" data-ink-role="main" onclick="clearReader()" style="border-color:var(--error); color:var(--error); margin-left: 5px;" title="Okuma alanını temizle">🗑️</button>
 
       </div>`;
   readerDiv.appendChild(toolbar);
+  const notesPanel = document.createElement("div");
+  notesPanel.id = "reader-notes-panel";
+  notesPanel.style.cssText = "display:none; margin:10px 0 15px 0; border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--surface-alt);";
+  readerDiv.appendChild(notesPanel);
+  const notebookPanel = document.createElement("div");
+  notebookPanel.id = "reader-notebook-panel";
+  notebookPanel.style.cssText = "display:none; margin:0 0 15px 0; border:1px solid var(--border); border-radius:10px; padding:10px; background:var(--surface-alt);";
+  readerDiv.appendChild(notebookPanel);
 
   globalTextForTTS = "";
   allWordSpans = [];
   window.activeSelectionTokenElements = [];
+  const contentWrap = document.createElement("div");
+  contentWrap.id = "reader-content-wrap";
+  contentWrap.style.position = "relative";
+  contentWrap.style.padding = "2px 0";
+
   rawText.split("\n").forEach((line) => {
     if (!line.trim()) {
-      readerDiv.appendChild(document.createElement("br"));
+      contentWrap.appendChild(document.createElement("br"));
       globalTextForTTS += "\n";
       return;
     }
     const pContainer = document.createElement("div");
     pContainer.style.marginBottom = "15px";
     line.split(/(\s+)/).forEach((token) => {
-      if (isLexTargetToken(token)) {
+      if (/[A-Za-z]/.test(token)) {
         const span = document.createElement("span");
         span.className = "tok";
         span.textContent = token;
@@ -814,11 +1961,26 @@ function processAndRenderText() {
         globalTextForTTS += token;
       }
     });
-    readerDiv.appendChild(pContainer);
+    contentWrap.appendChild(pContainer);
     globalTextForTTS += "\n";
   });
+  const inkCanvas = document.createElement("canvas");
+  inkCanvas.id = "reader-ink-canvas";
+  contentWrap.appendChild(inkCanvas);
+  readerDiv.appendChild(contentWrap);
   applySavedHighlightsToReader(rawText);
+  setupReaderInkCanvas(rawText);
   applyReaderFontSize();
+  if (readerNotesPanelOpen) {
+    const panel = document.getElementById("reader-notes-panel");
+    if (panel) panel.style.display = "block";
+    window.renderReaderNotesPanel();
+  }
+  if (readerNotebookPanelOpen) {
+    const panel = document.getElementById("reader-notebook-panel");
+    if (panel) panel.style.display = "block";
+    if (typeof window.renderReaderNotebookPanel === "function") window.renderReaderNotebookPanel();
+  }
   updateReadingProgressForText(rawText);
   renderDecksAccordion();
   if (typeof renderSavedReadingWorks === "function") renderSavedReadingWorks();
@@ -836,7 +1998,7 @@ function applyReaderFontSize() {
 
 window.adjustReaderFontSize = function (delta) {
   readerFontScale = Math.max(0.8, Math.min(1.8, Number((readerFontScale + delta).toFixed(2))));
-  localStorage.setItem(appStoreKey("reader_font_scale"), String(readerFontScale));
+  localStorage.setItem("y_reader_font_scale", String(readerFontScale));
   applyReaderFontSize();
   showToastMessage(`Metin boyutu: ${Math.round(readerFontScale * 100)}%`);
 };
@@ -859,9 +2021,9 @@ window.persistCurrentReadingState = async function () {
   }
   updateReadingProgressForText(text);
   try {
-    if (typeof syncCloudData === "function") syncCloudData();
-    if (typeof saveDb === "function") saveDb();
-    if (window.useFirebase && window.db && window.dbUserData && window.dbUserData[currentUsername]) {
+    if (typeof syncCloudData === "function") await syncCloudData();
+    else if (typeof saveDb === "function") await saveDb();
+    else if (window.useFirebase && window.db && window.dbUserData && window.dbUserData[currentUsername]) {
       const payload = {};
       payload[currentUsername] = window.dbUserData[currentUsername];
       await window.db.collection("global").doc("userdata").set(payload, { merge: true });
@@ -910,7 +2072,7 @@ window.saveCurrentReadingWork = function () {
   if (existingIdx >= 0) state.readingWorks[existingIdx] = payload;
   else state.readingWorks.unshift(payload);
   currentReadingWorkMeta = {
-    sourceType: payload.sourceType,
+    sourceType: "saved",
     sourceId: payload.id,
     title: payload.title,
   };
@@ -953,7 +2115,7 @@ window.openSavedReadingWork = function (workId) {
   if (!work) return;
   document.getElementById("input-text").value = work.text || "";
   currentReadingWorkMeta = {
-    sourceType: work.sourceType || "saved",
+    sourceType: "saved",
     sourceId: work.id,
     title: work.title || "Kaydedilen metin",
   };
@@ -1009,10 +2171,15 @@ window.renderSavedReadingWorks = function () {
       const pct = Number(prog.percent || 0);
       const dateText = new Date(w.updatedAt || w.createdAt || Date.now()).toLocaleString("tr-TR");
       const cat = (w.category || "Genel").trim() || "Genel";
-      return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);">
+      const rwDone =
+        typeof isReadingCompletionKeyDone === "function" &&
+        isReadingCompletionKeyDone(`saved:${w.id}`);
+      const tick = rwDone ? ' <span class="reading-done-badge" title="Tamamlandı">✓</span>' : "";
+      const doneNote = rwDone ? " • <span style='color:var(--success);'>Bitirdiğinizi işaretlediniz</span>" : "";
+      return `<div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; padding:10px; border:1px solid var(--border); border-radius:8px; background:var(--surface);${rwDone ? " border-color: rgba(34, 197, 94, 0.45);" : ""}">
         <div style="min-width:0;">
-          <div style="font-weight:bold; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${w.title}</div>
-          <div style="font-size:0.82rem; color:var(--text-dim);">Kategori: ${cat} • Son çalışma: ${dateText} • %${pct} tamamlandı</div>
+          <div style="font-weight:bold; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${w.title}${tick}</div>
+          <div style="font-size:0.82rem; color:var(--text-dim);">Kategori: ${cat} • Son çalışma: ${dateText} • %${pct} tamamlandı${doneNote}</div>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end;">
           <button class="secondary-btn" style="padding:7px 10px; font-size:0.82rem;" onclick="openSavedReadingWork('${w.id}')">Aç</button>
@@ -1063,7 +2230,7 @@ function bindReaderSelectionTranslation() {
     if (!isInsideReader(sel.anchorNode) && !isInsideReader(sel.focusNode)) return null;
     const text = String(sel.toString() || "").trim();
     if (!text || text.length < 2) return null;
-    if (!isLexTargetToken(text)) return null;
+    if (!/[\u0370-\u03FF]/.test(text)) return null;
     if (text.length > 220) return null;
     const range = sel.rangeCount > 0 ? sel.getRangeAt(0) : null;
     const selectedTokens = [];
@@ -1116,7 +2283,7 @@ function bindReaderSelectionTranslation() {
   });
 
   reader.addEventListener("touchend", function () {
-    setTimeout(() => applySelection(true), 120);
+    setTimeout(() => applySelection(true), 260);
   }, { passive: true });
 
   document.addEventListener("selectionchange", function () {
@@ -1125,7 +2292,7 @@ function bindReaderSelectionTranslation() {
       // Mobilde native seçim menüsü açıldığında touchend/mouseup kaçabiliyor;
       // selectionchange üzerinden popup açarak çoklu seçimi yakalıyoruz.
       applySelection(!!isTouchLikeDevice);
-    }, 140);
+    }, isTouchLikeDevice ? 300 : 170);
   });
 
   readerSelectionBindingDone = true;
@@ -1569,11 +2736,7 @@ function exportDecksToCSV() {
 
   const selectedDeck = viewSelect.value;
 
-  const csvEn =
-    typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
-  let csvContent = csvEn
-    ? "Ingilizce,Turkce,Deste Adi\n"
-    : "Yunanca,Turkce,Deste Adi\n";
+  let csvContent = "English,Turkish,Deck Name\n";
   let exportCount = 0;
 
   for (let deckName in userDecks) {
@@ -1762,9 +2925,7 @@ function finishQuiz() {
   if (quizMistakes.length > 0) {
     document.getElementById("mistakes-container").style.display = "block";
     document.getElementById("retry-mistakes-btn").style.display = "inline-flex";
-    const qzEn =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
-    let th = `<tr><th>${qzEn ? "İngilizce" : "Yunanca"}</th><th>Türkçe</th></tr>`;
+    let th = `<tr><th>English</th><th>Türkçe</th></tr>`;
     table.innerHTML =
       th +
       quizMistakes
@@ -2166,7 +3327,7 @@ function tokenizeForExamInteractive(text) {
   let html = "";
   let safeSentence = text.replace(/'/g, "\\'").replace(/"/g, '\\"');
   text.split(/(\s+)/).forEach((token) => {
-    if (isLexTargetToken(token)) {
+    if (/[\u0370-\u03FF]/.test(token)) {
       let safeWord = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
       html += `<span class="tok" onclick="examTokenClicked(event, '${safeWord}', '${safeSentence}')">${token}</span>`;
     } else {
@@ -2244,11 +3405,7 @@ function finishExam() {
 function renderVideoLibrary() {
   const grid = document.getElementById("video-grid-container");
   const filterContainer = document.getElementById("video-category-filters");
-  const catalog =
-    typeof getActiveVideoKatalogu === "function"
-      ? getActiveVideoKatalogu()
-      : VIDEO_KATALOGU;
-  const uniqueCategories = [...new Set(catalog.map((v) => v.category))];
+  const uniqueCategories = [...new Set(VIDEO_KATALOGU.map((v) => v.category))];
   const allCategories = ["Tümü", ...uniqueCategories];
   filterContainer.innerHTML = allCategories
     .map(
@@ -2258,8 +3415,8 @@ function renderVideoLibrary() {
     .join("");
   const filteredVideos =
     currentVideoCategory === "Tümü"
-      ? catalog
-      : catalog.filter((v) => v.category === currentVideoCategory);
+      ? VIDEO_KATALOGU
+      : VIDEO_KATALOGU.filter((v) => v.category === currentVideoCategory);
   grid.innerHTML = "";
   if (filteredVideos.length === 0) {
     grid.innerHTML = `<p style="color:var(--text-dim); text-align:center; grid-column: 1 / -1; padding: 30px;">Bu kategoride henüz video bulunmuyor.</p>`;
@@ -2282,7 +3439,7 @@ async function openVideo(videoId, title) {
   if (!requireAuth(1)) return;
   showToastMessage("⏳ Video ve altyazılar yükleniyor...");
   try {
-    const res = await fetch(appAssetPath(`altyazilar/${videoId}.json`));
+    const res = await fetch(`altyazilar/${videoId}.json`);
     if (!res.ok)
       throw new Error(
         `Altyazı dosyası bulunamadı ('altyazilar/${videoId}.json').`,
@@ -2361,7 +3518,7 @@ function syncSubtitles() {
       mainBox.classList.add("active");
       subGrContainer.innerHTML = "";
       currentSub.gr.split(/(\s+)/).forEach((token) => {
-        if (isLexTargetToken(token)) {
+        if (/[\u0370-\u03FF]/.test(token)) {
           const span = document.createElement("span");
           span.className = "tok";
           span.textContent = token;
@@ -2381,10 +3538,7 @@ function onPlayerStateChange(event) {}
 function renderTVLibrary() {
   const grid = document.getElementById("tv-grid-container");
   let html = "";
-  (typeof getActiveTVChannels === "function"
-    ? getActiveTVChannels()
-    : GREEK_TV_CHANNELS
-  ).forEach((tv) => {
+  GREEK_TV_CHANNELS.forEach((tv) => {
     html += `<div class="text-card" onclick="openTVChannel('${tv.url}', '${tv.name}')" style="min-height:auto; display:flex; align-items:center; flex-direction:row; gap:15px; padding: 15px;"><span style="font-size:2rem;">🔴</span><div class="text-card-title" style="margin-bottom:0; font-size:1.15rem;">${tv.name}</div></div>`;
   });
   grid.innerHTML = html;
@@ -2425,10 +3579,7 @@ function closeMediaWorkspace() {
 function renderRadioLibrary() {
   const grid = document.getElementById("radio-grid-container");
   let html = "";
-  (typeof getActiveRadioChannels === "function"
-    ? getActiveRadioChannels()
-    : GREEK_RADIO_CHANNELS
-  ).forEach((radio) => {
+  GREEK_RADIO_CHANNELS.forEach((radio) => {
     html += `<div class="text-card" onclick="openRadioChannel('${radio.url}', '${radio.name}')" style="min-height:auto; display:flex; align-items:center; flex-direction:row; gap:15px; padding: 15px; border-color: rgba(232, 201, 109, 0.3);"><span style="font-size:2rem;">🎵</span><div class="text-card-title" style="margin-bottom:0; font-size:1.15rem; color:var(--accent2);">${radio.name}</div></div>`;
   });
   grid.innerHTML = html;
@@ -2459,10 +3610,7 @@ function closeRadioPlayer() {
 function renderNewspaperLibrary() {
   const grid = document.getElementById("news-grid-container");
   let html = "";
-  (typeof getActiveNewspapers === "function"
-    ? getActiveNewspapers()
-    : GREEK_NEWSPAPERS
-  ).forEach((news) => {
+  GREEK_NEWSPAPERS.forEach((news) => {
     html += `<div class="text-card" onclick="openNewspaper('${news.url}')" style="min-height:auto; display:flex; align-items:center; flex-direction:row; gap:15px; padding: 15px; border-color: rgba(79, 142, 247, 0.3);"><span style="font-size:2.2rem;">📰</span><div style="flex: 1;"><div class="text-card-title" style="margin-bottom:2px; font-size:1.1rem; color:var(--text);">${news.name}</div><div style="font-size:0.85rem; color:var(--text-dim);">${news.desc}</div></div><div style="color:var(--accent); font-size:1.5rem; font-weight:bold;">➔</div></div>`;
   });
   grid.innerHTML = html;
@@ -2489,24 +3637,19 @@ function parseGtxTranslation(data) {
 }
 
 async function fetchGoogleElToTr(text) {
-  return fetchGoogleTranslate(text, "el", "tr");
-}
-
-async function fetchGoogleTranslate(text, sl, tl) {
   const q = encodeURIComponent(text);
-  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&q=${q}`;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=el&tl=tr&dt=t&q=${q}`;
   const res = await fetch(url, { mode: "cors", cache: "no-store" });
   if (!res.ok) throw new Error("translate http " + res.status);
   const data = await res.json();
   return parseGtxTranslation(data);
 }
 
-async function fetchMyMemoryPair(text, langpair) {
+async function fetchMyMemoryElToTr(text) {
   const url =
     "https://api.mymemory.translated.net/get?q=" +
     encodeURIComponent(text) +
-    "&langpair=" +
-    langpair;
+    "&langpair=el|tr";
   const res = await fetch(url, { mode: "cors", cache: "no-store" });
   if (!res.ok) throw new Error("mymemory http");
   const js = await res.json();
@@ -2521,23 +3664,8 @@ async function fetchMyMemoryPair(text, langpair) {
   return null;
 }
 
-async function fetchMyMemoryElToTr(text) {
-  return fetchMyMemoryPair(text, "el|tr");
-}
-
-async function fetchMyMemoryEnToTr(text) {
-  return fetchMyMemoryPair(text, "en|tr");
-}
-
-function getSmartTranslateLangPair() {
-  if (typeof getTargetLexLang === "function" && getTargetLexLang() === "en") {
-    return { sl: "en", tl: "tr", myMem: "en|tr" };
-  }
-  return { sl: "el", tl: "tr", myMem: "el|tr" };
-}
-
 /**
- * Kelime popup'ında kullanılır (modal.js). Öğrenilen dil → Türkçe.
+ * Kelime popup'ında kullanılır (modal.js). Yunanca → Türkçe.
  */
 async function getSmartTranslation(word, contextSentence) {
   const clean = String(word || "")
@@ -2565,23 +3693,14 @@ async function getSmartTranslation(word, contextSentence) {
       ),
     ]);
 
-  const pair = getSmartTranslateLangPair();
   try {
-    const g = await withTimeout(
-      fetchGoogleTranslate(clean, pair.sl, pair.tl),
-      12000,
-    );
+    const g = await withTimeout(fetchGoogleElToTr(clean), 12000);
     if (g) return g;
   } catch (e) {
     console.warn("getSmartTranslation Google:", e);
   }
   try {
-    const m = await withTimeout(
-      pair.myMem === "en|tr"
-        ? fetchMyMemoryEnToTr(clean)
-        : fetchMyMemoryElToTr(clean),
-      12000,
-    );
+    const m = await withTimeout(fetchMyMemoryElToTr(clean), 12000);
     if (m) return m;
   } catch (e) {
     console.warn("getSmartTranslation MyMemory:", e);
@@ -2651,28 +3770,14 @@ async function translateFullContext() {
       ),
     ]);
   try {
-    const pair = getSmartTranslateLangPair();
-    let t = await withTimeout(fetchGoogleTranslate(ctx, pair.sl, pair.tl), 15000);
-    if (!t) {
-      t = await withTimeout(
-        pair.myMem === "en|tr"
-          ? fetchMyMemoryEnToTr(ctx)
-          : fetchMyMemoryElToTr(ctx),
-        15000,
-      );
-    }
+    let t = await withTimeout(fetchGoogleElToTr(ctx), 15000);
+    if (!t) t = await withTimeout(fetchMyMemoryElToTr(ctx), 15000);
 
     const elHtml = highlightWordInGreekSentence(ctx, word);
     const trEscaped = escapeHtmlForPopup(t || "—");
-    const label =
-      pair.sl === "en"
-        ? "Cümlenin tamamı (İngilizce → Türkçe)"
-        : "Cümlenin tamamı (Yunanca → Türkçe)";
 
     box.innerHTML =
-      '<div class="wp-sentence-label">' +
-      label +
-      "</div>" +
+      '<div class="wp-sentence-label">Cümlenin tamamı (İngilizce → Türkçe)</div>' +
       '<div class="wp-sentence-el-block">' +
       elHtml +
       "</div>" +
@@ -2696,19 +3801,12 @@ async function searchDictionary() {
     return;
   }
 
-  if (currentDictMode === "gr-gr") {
+  // en-en sözlüğü farklı bir sayfaya attığı için
+  if (currentDictMode === "en-en") {
     showToastMessage("Sözlük güvenli sekmede açılıyor...");
     window.open(
-      "https://www.greek-language.gr/greekLang/modern_greek/tools/lexica/search.html?lq=" +
+      "https://www.merriam-webster.com/dictionary/" +
         encodeURIComponent(word),
-      "_blank",
-    );
-    return;
-  }
-  if (currentDictMode === "en-en") {
-    showToastMessage("Sözlük yeni sekmede açılıyor...");
-    window.open(
-      "https://www.dictionary.com/browse/" + encodeURIComponent(word),
       "_blank",
     );
     return;
@@ -2718,26 +3816,8 @@ async function searchDictionary() {
   resultsContainer.classList.add("active");
   resultsContainer.innerHTML = `<div style="text-align:center; color:var(--accent); padding:20px;">⏳ Çevriliyor...</div>`;
 
-  const sl =
-    currentDictMode === "gr-tr"
-      ? "el"
-      : currentDictMode === "tr-gr"
-        ? "tr"
-        : currentDictMode === "en-tr"
-          ? "en"
-          : currentDictMode === "tr-en"
-            ? "tr"
-            : "el";
-  const tl =
-    currentDictMode === "gr-tr"
-      ? "tr"
-      : currentDictMode === "tr-gr"
-        ? "el"
-        : currentDictMode === "en-tr"
-          ? "tr"
-          : currentDictMode === "tr-en"
-            ? "en"
-            : "tr";
+  const sl = currentDictMode === "en-tr" ? "en" : "tr";
+  const tl = currentDictMode === "en-tr" ? "tr" : "en";
 
   try {
     const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=${sl}&tl=${tl}&dt=t&dt=bd&q=${encodeURIComponent(word)}`;
@@ -2748,16 +3828,10 @@ async function searchDictionary() {
     let dictHtml = "";
     const safeWord = word.replace(/'/g, "\\'");
     const safeTrans = mainTrans.replace(/'/g, "\\'");
-    const phon =
-      typeof getLexPhoneticDisplay === "function"
-        ? getLexPhoneticDisplay(word)
-        : getGreekPhonetics(word);
 
-    if (currentDictMode === "gr-tr") {
+    if (currentDictMode === "en-tr") {
       dictHtml = `<div class="dict-main-word tok" onclick="triggerWordPopup(event, '${safeWord}', 'Sözlük: ${safeWord}')" style="cursor:pointer; display:inline-block;">${word}</div><div class="dict-phonetic">/${getGreekPhonetics(word)}/</div><div class="dict-main-translation">${mainTrans}</div>`;
-    } else if (currentDictMode === "en-tr") {
-      dictHtml = `<div class="dict-main-word tok" onclick="triggerWordPopup(event, '${safeWord}', 'Sözlük: ${safeWord}')" style="cursor:pointer; display:inline-block;">${word}</div><div class="dict-phonetic">/${phon}/</div><div class="dict-main-translation">${mainTrans}</div>`;
-    } else if (currentDictMode === "tr-gr" || currentDictMode === "tr-en") {
+    } else if (currentDictMode === "tr-en") {
       dictHtml = `<div class="dict-main-word">${word}</div><div class="dict-main-translation tok" onclick="triggerWordPopup(event, '${safeTrans}', 'Sözlük: ${safeTrans}')" style="cursor:pointer; display:inline-block; color:var(--accent2); margin-bottom: 20px; padding-bottom: 15px; border-bottom: 1px solid var(--border);">${mainTrans}</div>`;
     }
 
@@ -2766,7 +3840,7 @@ async function searchDictionary() {
         let synHtml = `<div class="dict-pos-group"><div class="dict-pos-title">${posGroup[0]}</div><div class="dict-synonyms">`;
         posGroup[1].forEach((tr) => {
           const safeTr = tr.replace(/'/g, "\\'");
-          if (currentDictMode === "tr-gr" || currentDictMode === "tr-en") {
+          if (currentDictMode === "tr-en") {
             synHtml += `<span class="dict-syn-item tok" onclick="triggerWordPopup(event, '${safeTr}', 'Sözlük: ${safeTr}')" style="cursor:pointer;">${tr}</span>`;
           } else {
             synHtml += `<span class="dict-syn-item">${tr}</span>`;
@@ -2849,7 +3923,7 @@ function getMergedPracticeCatalogForView() {
 
 function persistPracticesCatalog() {
   try {
-    localStorage.setItem(appStoreKey("practices_db"), JSON.stringify(PRACTICE_CATALOG));
+    localStorage.setItem("y_practices_db", JSON.stringify(PRACTICE_CATALOG));
   } catch (e) { /* ignore */ }
   if (typeof useFirebase !== "undefined" && useFirebase && typeof db !== "undefined") {
     db.collection("global").doc("practices").set({ list: PRACTICE_CATALOG }).catch(function (err) {
@@ -3477,7 +4551,7 @@ function tokenizePracHTMLLine(line) {
     if (!token) return;
     if (token.startsWith("<")) {
       html += token;
-    } else if (isLexTargetToken(token)) {
+    } else if (/[\u0370-\u03FF]/.test(token)) {
       let safeWord = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
       html += `<span class="tok" onclick="event.stopPropagation(); triggerWordPopup(event, '${safeWord}', '${safeSentence}')">${token}</span>`;
     } else {
@@ -3538,7 +4612,7 @@ function tokenizePracTextLine(line, questionsArray) {
       }
     } else if (token.startsWith("<")) {
       html += token;
-    } else if (isLexTargetToken(token)) {
+    } else if (/[\u0370-\u03FF]/.test(token)) {
       let safeWord = token.replace(/'/g, "\\'").replace(/"/g, '\\"');
       html += `<span class="tok" onclick="event.stopPropagation(); triggerWordPopup(event, '${safeWord}', '${safeSentence}')">${token}</span>`;
     } else {
@@ -3954,7 +5028,7 @@ function clearReader() {
 
 // Sayfa yüklendiğinde kullanıcının tercihini hafızadan çek ve uygula
 function initTheme() {
-  const savedTheme = localStorage.getItem(appStoreKey("theme")) || "dark"; // Varsayılan: Karanlık
+  const savedTheme = localStorage.getItem("y_theme") || "light"; // Varsayılan: aydınlık
   const themeBtn = document.getElementById("theme-toggle-btn");
 
   if (savedTheme === "light") {
@@ -3972,11 +5046,11 @@ function toggleTheme() {
   const themeBtn = document.getElementById("theme-toggle-btn");
 
   if (isLight) {
-    localStorage.setItem(appStoreKey("theme"), "light");
+    localStorage.setItem("y_theme", "light");
     if (themeBtn) themeBtn.textContent = "🌙";
     showToastMessage("☀️ Açık temaya geçildi.");
   } else {
-    localStorage.setItem(appStoreKey("theme"), "dark");
+    localStorage.setItem("y_theme", "dark");
     if (themeBtn) themeBtn.textContent = "☀️";
     showToastMessage("🌙 Karanlık temaya geçildi.");
   }
@@ -4068,9 +5142,9 @@ function saveYdsExplanation() {
     if (qIndex > -1) {
         GLOBAL_SORU_BANKASI[qIndex].explanation = expText;
         
-        let savedExplanations = JSON.parse(localStorage.getItem(appStoreKey('yds_explanations'))) || {};
+        let savedExplanations = JSON.parse(localStorage.getItem('y_yds_explanations')) || {};
         savedExplanations[qId] = expText;
-        localStorage.setItem(appStoreKey('yds_explanations'), JSON.stringify(savedExplanations));
+        localStorage.setItem('y_yds_explanations', JSON.stringify(savedExplanations));
         
         if (typeof db !== 'undefined' && db !== null) {
             db.collection("global").doc("yds_explanations").set(savedExplanations, { merge: true })
@@ -4098,7 +5172,7 @@ function listenForYdsExplanations() {
             if (doc.exists) {
                 const cloudExplanations = doc.data();
                 
-                localStorage.setItem(appStoreKey('yds_explanations'), JSON.stringify(cloudExplanations));
+                localStorage.setItem('y_yds_explanations', JSON.stringify(cloudExplanations));
                 
                 if (typeof GLOBAL_SORU_BANKASI !== 'undefined' && GLOBAL_SORU_BANKASI.length > 0) {
                     for (let qId in cloudExplanations) {
@@ -4124,7 +5198,7 @@ setTimeout(listenForYdsExplanations, 2000);
 setInterval(() => {
     if (typeof GLOBAL_SORU_BANKASI === 'undefined' || GLOBAL_SORU_BANKASI.length === 0) return;
     
-    const savedExplanations = JSON.parse(localStorage.getItem(appStoreKey('yds_explanations')));
+    const savedExplanations = JSON.parse(localStorage.getItem('y_yds_explanations'));
     if (savedExplanations) {
         for (let qId in savedExplanations) {
             const realQ = GLOBAL_SORU_BANKASI.find(q => String(q.id) === String(qId));
@@ -4136,7 +5210,7 @@ setInterval(() => {
 }, 2000);
 
 
-window.GLOBAL_LESSONS = JSON.parse(localStorage.getItem(appStoreKey('lessons_db'))) || [];
+window.GLOBAL_LESSONS = JSON.parse(localStorage.getItem('y_lessons_db')) || [];
 
 /* ==========================================
  * YDS / SINAV SİSTEMİ VERİ ÇEKME VE ÇİZDİRME MOTORU
@@ -4213,8 +5287,8 @@ window.fetchExamData = async function() {
 
     window.GLOBAL_SORU_BANKASI = [];
 
-    const fetchPromises = EXAM_FILES.map((file) =>
-      fetch(appAssetPath(file))
+    const fetchPromises = EXAM_FILES.map(file =>
+      fetch(file)
         .then(res => {
             if (!res.ok) return [];
             return res.json();
@@ -4255,18 +5329,62 @@ setTimeout(() => {
  * KONU ANLATIMI - YOUTUBE DESTEKLİ MOTOR
  * ========================================== */
 
-window.GLOBAL_LESSONS = JSON.parse(localStorage.getItem(appStoreKey('lessons_db'))) || [];
+window.GLOBAL_LESSONS = JSON.parse(localStorage.getItem('y_lessons_db')) || [];
 
-window.persistLessonsDb = function () {
+window.persistLessonsDb = async function () {
     try {
-        localStorage.setItem(appStoreKey('lessons_db'), JSON.stringify(window.GLOBAL_LESSONS));
+        localStorage.setItem('y_lessons_db', JSON.stringify(window.GLOBAL_LESSONS));
     } catch (e) { /* ignore */ }
-    if (typeof useFirebase !== 'undefined' && useFirebase && typeof db !== 'undefined') {
-        return db.collection('global').doc('lessons_db').set({ list: window.GLOBAL_LESSONS }).catch(function (err) {
-            console.error('persistLessonsDb', err);
-        });
+    const cloudEnabled = !!(window.useFirebase || (typeof useFirebase !== 'undefined' && useFirebase));
+    const cloudDb = window.db || (typeof db !== 'undefined' ? db : null);
+    if (window.USE_STATIC_LESSONS_DB) {
+        return;
     }
-    return Promise.resolve();
+    if (cloudEnabled && cloudDb) {
+        try {
+            const lessonsCol = cloudDb.collection('global_lessons');
+            const existingSnap = await lessonsCol.get();
+            const existingIds = new Set(existingSnap.docs.map(function (d) { return d.id; }));
+
+            const ops = [];
+            window.GLOBAL_LESSONS.forEach(function (lesson, idx) {
+                if (!lesson || typeof lesson !== "object") return;
+                const rawId = String(lesson.id || "").trim();
+                const docId = rawId || ("lesson_" + idx);
+                const payload = {
+                    ...lesson,
+                    id: docId,
+                    __order: idx,
+                    updatedAt: Date.now(),
+                };
+                ops.push({ type: "set", ref: lessonsCol.doc(docId), data: payload });
+                existingIds.delete(docId);
+            });
+
+            existingIds.forEach(function (id) {
+                ops.push({ type: "delete", ref: lessonsCol.doc(id) });
+            });
+
+            const CHUNK_SIZE = 450;
+            for (let i = 0; i < ops.length; i += CHUNK_SIZE) {
+                const batch = cloudDb.batch();
+                ops.slice(i, i + CHUNK_SIZE).forEach(function (op) {
+                    if (op.type === "set") batch.set(op.ref, op.data, { merge: true });
+                    else if (op.type === "delete") batch.delete(op.ref);
+                });
+                await batch.commit();
+            }
+
+            // Geriye uyumluluk: eski istemciler global/lessons_db belgesini okuyor.
+            // Aynı veriyi oraya da yazarak farklı cihaz/sürümde görünürlüğü koru.
+            await cloudDb.collection('global').doc('lessons_db').set({
+                list: window.GLOBAL_LESSONS,
+                updatedAt: Date.now(),
+            });
+        } catch (err) {
+            console.error('persistLessonsDb', err);
+        }
+    }
 };
 
 /** fromIdx: kaynak; toIdx: hedef satırın indeksi (o satırın yerine), veya -1 = listenin sonu */
@@ -4342,13 +5460,23 @@ window.saveLesson = async function() {
         return;
     }
 
+    const normalizeLessonLink = function(raw) {
+        const val = String(raw || "").trim();
+        if (!val) return "";
+        if (/^(https?:)?\/\//i.test(val)) return val;
+        if (/^assets\/lessons\//i.test(val)) return val;
+        if (/^[^\/]+\.(pdf|docx?|xhtml?|html?)$/i.test(val)) return "assets/lessons/" + val;
+        return val;
+    };
+
     const lessonData = {
         id: idInput.value.trim(),
         title: titleInput.value.trim(),
         category: catInput.value.trim() || "Genel Gramer",
         content: bodyInput.innerHTML,
-        link: linkInput ? linkInput.value.trim() : "", 
-        date: new Date().toLocaleDateString('tr-TR')
+        link: linkInput ? normalizeLessonLink(linkInput.value) : "",
+        date: new Date().toLocaleDateString('tr-TR'),
+        updatedAt: Date.now(),
     };
 
     const idx = window.GLOBAL_LESSONS.findIndex(l => l.id === lessonData.id);
@@ -4375,10 +5503,74 @@ window.filterLessons = function() {
     window.renderLessonLibrary(query);
 };
 
+window.LESSON_ASSET_TEXT_INDEX = window.LESSON_ASSET_TEXT_INDEX || {};
+window.__lessonAssetIndexBuildInFlight = false;
+window.__lessonAssetIndexKey = window.__lessonAssetIndexKey || "";
+
+window.getLessonAssetUrl = function(lesson) {
+    if (!lesson || typeof lesson !== "object") return "";
+    const link = String(lesson.link || "").trim();
+    if (link && /(^|\/)assets\/lessons\//i.test(link)) return link;
+    const content = String(lesson.content || "");
+    const m = content.match(/\[(?:pdf|doc|embed):(.+?)\]/i);
+    if (m && m[1]) {
+        const url = String(m[1]).trim();
+        if (/(^|\/)assets\/lessons\//i.test(url)) return url;
+    }
+    return "";
+};
+
+window.getLessonAssetTextPath = function(assetUrl) {
+    const s = String(assetUrl || "").trim();
+    if (!s) return "";
+    return s.replace(/\.(pdf|docx?|PDF|DOCX?)(\?.*)?$/, ".txt");
+};
+
+window.ensureLessonAssetSearchIndex = function() {
+    const lessons = Array.isArray(window.GLOBAL_LESSONS) ? window.GLOBAL_LESSONS : [];
+    const keys = lessons.map(function(l) {
+        return String(l && l.id || "") + "|" + window.getLessonAssetUrl(l);
+    }).join("||");
+    if (keys === window.__lessonAssetIndexKey) return;
+    window.__lessonAssetIndexKey = keys;
+    if (window.__lessonAssetIndexBuildInFlight) return;
+    window.__lessonAssetIndexBuildInFlight = true;
+
+    const jobs = lessons.map(function(l) {
+        const lessonId = String(l && l.id || "");
+        if (!lessonId) return Promise.resolve();
+        const assetUrl = window.getLessonAssetUrl(l);
+        if (!assetUrl) return Promise.resolve();
+        const txtPath = window.getLessonAssetTextPath(assetUrl);
+        if (!txtPath) return Promise.resolve();
+        if (typeof window.LESSON_ASSET_TEXT_INDEX[lessonId] === "string") return Promise.resolve();
+        return fetch(txtPath)
+            .then(function(res) { return res.ok ? res.text() : ""; })
+            .then(function(text) {
+                window.LESSON_ASSET_TEXT_INDEX[lessonId] = String(text || "");
+            })
+            .catch(function() {
+                window.LESSON_ASSET_TEXT_INDEX[lessonId] = "";
+            });
+    });
+
+    Promise.all(jobs).finally(function() {
+        window.__lessonAssetIndexBuildInFlight = false;
+        if (typeof window.renderLessonLibrary === "function") {
+            const qEl = document.getElementById('lesson-search-input');
+            const q = qEl ? qEl.value : "";
+            window.renderLessonLibrary(q);
+        }
+    });
+};
+
 // 2. KARTLARI ÇİZDİRME (Gelişmiş Canlı Arama Destekli)
 window.renderLessonLibrary = function(searchQuery = "") {
     const container = document.getElementById('lessons-grid-container');
     if(!container) return;
+    if (typeof window.ensureLessonAssetSearchIndex === "function") {
+        window.ensureLessonAssetSearchIndex();
+    }
     
     if(window.GLOBAL_LESSONS.length === 0) {
          container.innerHTML = '<p style="color:var(--text-dim); text-align:center; padding: 20px;">Henüz konu eklenmemiş.</p>';
@@ -4391,16 +5583,56 @@ window.renderLessonLibrary = function(searchQuery = "") {
         return str.toLocaleLowerCase('tr-TR').normalize("NFD").replace(/[\u0300-\u036f]/g, "");
     };
 
-    let filteredLessons = window.GLOBAL_LESSONS;
+    let filteredLessons = window.GLOBAL_LESSONS.map((lesson) => ({ lesson, score: 0, snippet: "" }));
+
+    const stripHtml = (html) => String(html || "").replace(/<[^>]*>/g, " ");
+    const escapeHtml = (s) => String(s || "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
     // Eğer arama kutusuna bir şey yazılmışsa dersleri filtrele
     if (searchQuery.trim() !== "") {
-        const lowerQuery = normalizeStr(searchQuery);
-        filteredLessons = window.GLOBAL_LESSONS.filter(l => 
-            normalizeStr(l.title).includes(lowerQuery) || 
-            normalizeStr(l.category).includes(lowerQuery) || 
-            normalizeStr(l.content).includes(lowerQuery) // Dersi açmadan içindeki yazılarda bile arama yapar!
-        );
+        const terms = normalizeStr(searchQuery).split(/\s+/).filter(Boolean);
+        filteredLessons = filteredLessons
+          .map((row) => {
+            const l = row.lesson;
+            const titleRaw = String(l.title || "");
+            const categoryRaw = String(l.category || "");
+            const contentRaw = stripHtml(l.content || "");
+            const assetTextRaw = String((window.LESSON_ASSET_TEXT_INDEX && window.LESSON_ASSET_TEXT_INDEX[l.id]) || "");
+            const title = normalizeStr(titleRaw);
+            const category = normalizeStr(categoryRaw);
+            const content = normalizeStr(contentRaw);
+            const assetText = normalizeStr(assetTextRaw);
+
+            let score = 0;
+            terms.forEach((t) => {
+              if (!t || t.length < 2) return;
+              if (title.includes(t)) score += 10;
+              if (category.includes(t)) score += 6;
+              if (content.includes(t)) score += 3;
+              if (assetText.includes(t)) score += 4;
+            });
+
+            let snippet = "";
+            if (score > 0) {
+              const firstTerm = terms.find((t) => t.length >= 2) || "";
+              const sourceForSnippet = contentRaw || assetTextRaw;
+              const normSource = normalizeStr(sourceForSnippet);
+              const idx = firstTerm ? normSource.indexOf(firstTerm) : -1;
+              if (idx >= 0) {
+                const start = Math.max(0, idx - 55);
+                const end = Math.min(sourceForSnippet.length, idx + 115);
+                snippet = (start > 0 ? "... " : "") + sourceForSnippet.slice(start, end).trim() + (end < sourceForSnippet.length ? " ..." : "");
+              }
+            }
+            return { lesson: l, score, snippet };
+          })
+          .filter((row) => row.score > 0)
+          .sort((a, b) => b.score - a.score);
+    } else {
+      filteredLessons = filteredLessons.map((row) => ({ ...row, score: 0, snippet: "" }));
     }
 
     // Aranan kelime hiçbir derste yoksa uyarı ver
@@ -4410,25 +5642,37 @@ window.renderLessonLibrary = function(searchQuery = "") {
     }
 
     container.className = ""; 
-    const categories = [...new Set(filteredLessons.map(l => l.category || "Genel Gramer"))].sort();
+    const categories = [...new Set(filteredLessons.map(x => x.lesson.category || "Genel Gramer"))].sort();
     let html = "";
 
     categories.forEach((cat, index) => {
         const safeCatId = "lesson_cat_" + index;
-        const lessonsInCat = filteredLessons.filter(l => (l.category || "Genel Gramer") === cat);
+        const lessonsInCat = filteredLessons.filter(x => (x.lesson.category || "Genel Gramer") === cat);
 
         // Eğer bu kategoride filtrelenmiş bir ders yoksa bu klasörü hiç çizme
         if(lessonsInCat.length === 0) return;
 
         let cardsHtml = `<div class="text-grid">`;
-        lessonsInCat.forEach(l => {
-            const isYouTube = l.link && (l.link.includes('youtube.com') || l.link.includes('youtu.be'));
-            const clickAction = (isYouTube || !l.link) ? `openLesson('${l.id}')` : `window.open('${l.link}', '_blank')`;
-            const actionText = isYouTube ? "📺 Videoyu İzle ➔" : (l.link ? "🔗 Kaynağa Git ➔" : "📖 Dersi Oku ➔");
+        lessonsInCat.forEach(row => {
+            const l = row.lesson;
+            const linkVal = String(l.link || "");
+            const isYouTube = linkVal && (linkVal.includes('youtube.com') || linkVal.includes('youtu.be'));
+            const isAssetFile = l.link && /(^|\/)assets\/lessons\//i.test(String(l.link));
+            const isEmbeddableRemote = !!(linkVal && (/\.(x?html?|pdf|docx?)(\?|#|$)/i.test(linkVal)));
+            const hasInlineEmbedTag = /\[(pdf|doc|html|embed):/i.test(String(l.content || ""));
+            const safeLessonId = String(l.id || "").replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+            const clickAction = (isYouTube || !l.link || isAssetFile || isEmbeddableRemote || hasInlineEmbedTag)
+                ? `openLesson('${safeLessonId}')`
+                : `window.open('${l.link}', '_blank')`;
+            const actionText = isYouTube
+                ? "📺 Videoyu İzle ➔"
+                : ((isAssetFile || isEmbeddableRemote || hasInlineEmbedTag) ? "📄 Dosyayı Aç ➔" : (l.link ? "🔗 Kaynağa Git ➔" : "📖 Dersi Oku ➔"));
+            const snippetHtml = row.snippet ? `<div style="color:var(--text-dim); font-size:0.82rem; line-height:1.4; margin-bottom:8px;">${escapeHtml(row.snippet)}</div>` : "";
 
             cardsHtml += `
             <div class="text-card" onclick="${clickAction}" style="border-color: var(--accent);">
                 <div class="text-card-title" style="margin-bottom:8px;">${l.title}</div>
+                ${snippetHtml}
                 <div class="text-card-play" style="color:var(--accent); font-size:0.9rem;">${actionText}</div>
             </div>
             `;
@@ -4455,6 +5699,71 @@ window.renderLessonLibrary = function(searchQuery = "") {
     container.innerHTML = html;
 };
 
+window.enableLessonPopupReading = function(containerEl) {
+    if (!containerEl) return;
+    globalTextForTTS = "";
+    allWordSpans = [];
+
+    const SKIP_TAGS = new Set(["SCRIPT", "STYLE", "IFRAME", "TEXTAREA", "CODE", "PRE"]);
+    const greekTokenRegex = /([\u0370-\u03FF\u1F00-\u1FFF]+(?:['’\-][\u0370-\u03FF\u1F00-\u1FFF]+)*)/g;
+
+    function splitTextToInteractiveFragment(text, sentenceText) {
+        const frag = document.createDocumentFragment();
+        let lastIndex = 0;
+        text.replace(greekTokenRegex, function(match, _g1, offset) {
+            if (offset > lastIndex) {
+                const plain = text.slice(lastIndex, offset);
+                frag.appendChild(document.createTextNode(plain));
+                globalTextForTTS += plain;
+            }
+            const span = document.createElement("span");
+            span.className = "tok";
+            span.textContent = match;
+            span.dataset.start = String(globalTextForTTS.length);
+            globalTextForTTS += match;
+            span.dataset.end = String(globalTextForTTS.length);
+            span.addEventListener("click", function(event) {
+                event.stopPropagation();
+                triggerWordPopup(event, match, sentenceText || text);
+            });
+            allWordSpans.push(span);
+            frag.appendChild(span);
+            lastIndex = offset + match.length;
+            return match;
+        });
+        if (lastIndex < text.length) {
+            const tail = text.slice(lastIndex);
+            frag.appendChild(document.createTextNode(tail));
+            globalTextForTTS += tail;
+        }
+        return frag;
+    }
+
+    function processTextNode(textNode) {
+        const text = textNode.nodeValue || "";
+        if (!/[\u0370-\u03FF\u1F00-\u1FFF]/.test(text)) return;
+        const parentEl = textNode.parentElement;
+        const sentenceText = (parentEl && parentEl.textContent ? parentEl.textContent.trim() : text.trim()).slice(0, 300);
+        const frag = splitTextToInteractiveFragment(text, sentenceText);
+        textNode.parentNode.replaceChild(frag, textNode);
+    }
+
+    function walk(node) {
+        if (!node) return;
+        if (node.nodeType === Node.ELEMENT_NODE) {
+            if (SKIP_TAGS.has(node.tagName)) return;
+            if (node.classList && node.classList.contains("tok")) return;
+            Array.from(node.childNodes).forEach(walk);
+            return;
+        }
+        if (node.nodeType === Node.TEXT_NODE) {
+            processTextNode(node);
+        }
+    }
+
+    walk(containerEl);
+};
+
 // 3. DERSİ AÇMA VE VİDEO GÖMME (EKSİKTİ!)
 // DERSİ GÖRÜNTÜLEME (Metin İçinde Video Desteği)
   // DERSİ GÖRÜNTÜLEME (Çoklu Video Desteği Eklendi)
@@ -4468,6 +5777,72 @@ window.openLesson = function(id) {
     document.getElementById('lesson-active-title').textContent = lesson.title;
     
     let finalContent = lesson.content || "";
+    const rawContent = String(lesson.content || "");
+    const hadExplicitEmbedTag = /\[(pdf|doc|html|embed):/i.test(rawContent);
+    const hadShortEmbedTag = /\[(pdf|doc|html)\]/i.test(rawContent);
+
+    function isPdfUrl(url) {
+        return /\.pdf(\?|#|$)/i.test(String(url || "").trim());
+    }
+
+    function isWordUrl(url) {
+        return /\.(doc|docx)(\?|#|$)/i.test(String(url || "").trim());
+    }
+
+    function isHtmlUrl(url) {
+        return /\.(x?html?)(\?|#|$)/i.test(String(url || "").trim());
+    }
+
+    function buildPdfEmbedHtml(url) {
+        const safeUrl = String(url || "").trim();
+        if (!safeUrl) return "";
+        return `
+            <div style="margin:25px 0; border-radius:12px; border:1px solid var(--border); box-shadow: var(--shadow); overflow:hidden; background:var(--surface-alt);">
+                <iframe
+                    style="display:block; width:100%; height:78vh; min-height:560px; border:0;"
+                    src="${safeUrl}"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    title="PDF Görüntüleyici"></iframe>
+            </div>`;
+    }
+
+    function buildWordEmbedHtml(url) {
+        const safeUrl = String(url || "").trim();
+        if (!safeUrl) return "";
+        let absoluteUrl = safeUrl;
+        if (!/^(https?:)?\/\//i.test(safeUrl)) {
+            try {
+                absoluteUrl = new URL(safeUrl, window.location.origin + "/").toString();
+            } catch (e) {
+                absoluteUrl = safeUrl;
+            }
+        }
+        const encoded = encodeURIComponent(absoluteUrl);
+        return `
+            <div style="margin:25px 0; border-radius:12px; border:1px solid var(--border); box-shadow: var(--shadow); overflow:hidden; background:var(--surface-alt);">
+                <iframe
+                    style="display:block; width:100%; height:78vh; min-height:560px; border:0;"
+                    src="https://view.officeapps.live.com/op/embed.aspx?src=${encoded}"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    title="Word Görüntüleyici"></iframe>
+            </div>`;
+    }
+
+    function buildHtmlEmbedHtml(url) {
+        const safeUrl = String(url || "").trim();
+        if (!safeUrl) return "";
+        return `
+            <div style="margin:25px 0; border-radius:12px; border:1px solid var(--border); box-shadow: var(--shadow); overflow:hidden; background:var(--surface-alt);">
+                <iframe
+                    style="display:block; width:100%; height:78vh; min-height:560px; border:0; background:#fff;"
+                    src="${safeUrl}"
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade"
+                    title="Ders Dokumani"></iframe>
+            </div>`;
+    }
 
     // --- 1. ANA VİDEO MOTORU (Üstteki Link Kutusuna Yazılan Video) ---
     if (lesson.link && (lesson.link.includes('youtube.com') || lesson.link.includes('youtu.be'))) {
@@ -4501,8 +5876,55 @@ window.openLesson = function(id) {
         }
         return match; // Eğer geçersiz bir linkse yazıyı bozmadan bırakır
     });
+
+    // --- 3. DOSYA GÖMME MOTORU (PDF / WORD) ---
+    // [pdf:URL], [doc:URL], [html:URL], [embed:URL]
+    finalContent = finalContent.replace(/\[(pdf|doc|html|embed):(.+?)\]/gi, function(match, kind, rawUrl) {
+        const url = String(rawUrl || "").trim();
+        if (!url) return "";
+        const k = String(kind || "").toLowerCase();
+        if (k === "pdf") return buildPdfEmbedHtml(url);
+        if (k === "doc") return buildWordEmbedHtml(url);
+        if (k === "html") return buildHtmlEmbedHtml(url);
+        if (isPdfUrl(url)) return buildPdfEmbedHtml(url);
+        if (isWordUrl(url)) return buildWordEmbedHtml(url);
+        if (isHtmlUrl(url)) return buildHtmlEmbedHtml(url);
+        return `
+            <p style="margin:16px 0;">
+                <a href="${url}" target="_blank" rel="noopener noreferrer">📎 İçeriği yeni sekmede aç</a>
+            </p>`;
+    });
+
+    // Link kutusu PDF/Word ise metne [pdf] / [doc] etiketleri yazılarak da gömülebilsin.
+    if (!hadExplicitEmbedTag && !hadShortEmbedTag && lesson.link && isPdfUrl(lesson.link)) {
+        const pdfHtml = buildPdfEmbedHtml(lesson.link);
+        if (finalContent.includes('[pdf]')) finalContent = finalContent.replace('[pdf]', pdfHtml);
+        else if (!/\[(pdf|doc|embed):/i.test(finalContent)) finalContent = pdfHtml + finalContent;
+    } else {
+        finalContent = finalContent.replace('[pdf]', '');
+    }
+
+    if (!hadExplicitEmbedTag && !hadShortEmbedTag && lesson.link && isWordUrl(lesson.link)) {
+        const docHtml = buildWordEmbedHtml(lesson.link);
+        if (finalContent.includes('[doc]')) finalContent = finalContent.replace('[doc]', docHtml);
+        else if (!/\[(pdf|doc|embed):/i.test(finalContent)) finalContent = docHtml + finalContent;
+    } else {
+        finalContent = finalContent.replace('[doc]', '');
+    }
+
+    if (!hadExplicitEmbedTag && !hadShortEmbedTag && lesson.link && isHtmlUrl(lesson.link)) {
+        const htmlEmbed = buildHtmlEmbedHtml(lesson.link);
+        if (finalContent.includes('[html]')) finalContent = finalContent.replace('[html]', htmlEmbed);
+        else if (!/\[(pdf|doc|html|embed):/i.test(finalContent)) finalContent = htmlEmbed + finalContent;
+    } else {
+        finalContent = finalContent.replace('[html]', '');
+    }
     
-    document.getElementById('lesson-active-body').innerHTML = finalContent;
+    const lessonBody = document.getElementById('lesson-active-body');
+    lessonBody.innerHTML = finalContent;
+    if (typeof window.enableLessonPopupReading === 'function') {
+        window.enableLessonPopupReading(lessonBody);
+    }
     window.scrollTo({top:0, behavior:'smooth'});
 };
 
@@ -4510,6 +5932,9 @@ window.openLesson = function(id) {
 window.closeLessonView = function() {
     const bodyEl = document.getElementById('lesson-active-body');
     if (bodyEl) bodyEl.innerHTML = ""; // Arkada video çalmaya devam etmesin diye içi temizlenir
+    globalTextForTTS = "";
+    allWordSpans = [];
+    if (typeof stopSpeech === "function") stopSpeech();
     const viewArea = document.getElementById('lesson-view-area');
     const gridContainer = document.getElementById('lessons-grid-container');
     
@@ -4588,7 +6013,7 @@ window.deleteLesson = function(id) {
  * SEKMELERİ GİZLE/GÖSTER MOTORU
  * ========================================== */
 const MAIN_TAB_IDS = ['read', 'video', 'media', 'dict', 'exam', 'practice', 'quiz', 'chat', 'lessons', 'kurs'];
-const MAIN_TAB_STORAGE_KEY = appStoreKey("main_tab");
+const MAIN_TAB_STORAGE_KEY = 'y_main_tab';
 
 /** #/kurs veya #kurs biçimi */
 window.parseMainTabFromHash = function () {

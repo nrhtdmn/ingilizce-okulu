@@ -75,12 +75,11 @@ async function fetchGoogleTTSAudio(text) {
     
     const url = `https://texttospeech.googleapis.com/v1/text:synthesize?key=${GOOGLE_TTS_API_KEY}`;
     
-    const useEn = typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
     const requestBody = {
         input: { text: text },
         voice: { 
-            languageCode: useEn ? "en-US" : "el-GR",
-            name: useEn ? "en-US-Wavenet-D" : "el-GR-Wavenet-A"
+            languageCode: "el-GR", 
+            name: "el-GR-Wavenet-A" // Bunu Wavenet olarak değiştiriyoruz
         },
         audioConfig: { 
             audioEncoding: "MP3"

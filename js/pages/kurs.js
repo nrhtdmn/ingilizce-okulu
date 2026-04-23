@@ -3,20 +3,20 @@
  * ============================================================ */
 
 // --- VERİ ---
-let kursClasses     = JSON.parse(localStorage.getItem(appStoreKey('kurs_classes')))      || [];
-let kursAssignments = JSON.parse(localStorage.getItem(appStoreKey('kurs_assignments')))  || [];
-let kursSubmissions = JSON.parse(localStorage.getItem(appStoreKey('kurs_submissions')))  || {};
-let kursThreads     = JSON.parse(localStorage.getItem(appStoreKey('kurs_threads')))        || {};
+let kursClasses     = JSON.parse(localStorage.getItem('y_kurs_classes'))      || [];
+let kursAssignments = JSON.parse(localStorage.getItem('y_kurs_assignments'))  || [];
+let kursSubmissions = JSON.parse(localStorage.getItem('y_kurs_submissions'))  || {};
+let kursThreads     = JSON.parse(localStorage.getItem('y_kurs_threads'))        || {};
 
 // Aktif oturum (öğrenci ödev çözerken)
 let kursActiveSession = null;
 let kursExamSession   = null;
 
 function saveKursData() {
-  localStorage.setItem(appStoreKey('kurs_classes'),      JSON.stringify(kursClasses));
-  localStorage.setItem(appStoreKey('kurs_assignments'),  JSON.stringify(kursAssignments));
-  localStorage.setItem(appStoreKey('kurs_submissions'),  JSON.stringify(kursSubmissions));
-  localStorage.setItem(appStoreKey('kurs_threads'),      JSON.stringify(kursThreads));
+  localStorage.setItem('y_kurs_classes',      JSON.stringify(kursClasses));
+  localStorage.setItem('y_kurs_assignments',  JSON.stringify(kursAssignments));
+  localStorage.setItem('y_kurs_submissions',  JSON.stringify(kursSubmissions));
+  localStorage.setItem('y_kurs_threads',      JSON.stringify(kursThreads));
 
   if (window.useFirebase && window.db) {
     window.db.collection("global").doc("kurs_data").set({
@@ -46,10 +46,10 @@ window.updateKursDataFromCloud = function(cloudData) {
       Object.assign(kursThreads, cloudData.threads);
   }
 
-  localStorage.setItem(appStoreKey('kurs_classes'), JSON.stringify(kursClasses));
-  localStorage.setItem(appStoreKey('kurs_assignments'), JSON.stringify(kursAssignments));
-  localStorage.setItem(appStoreKey('kurs_submissions'), JSON.stringify(kursSubmissions));
-  localStorage.setItem(appStoreKey('kurs_threads'), JSON.stringify(kursThreads));
+  localStorage.setItem('y_kurs_classes', JSON.stringify(kursClasses));
+  localStorage.setItem('y_kurs_assignments', JSON.stringify(kursAssignments));
+  localStorage.setItem('y_kurs_submissions', JSON.stringify(kursSubmissions));
+  localStorage.setItem('y_kurs_threads', JSON.stringify(kursThreads));
   
   // Eğer kullanıcı o an Kurs sekmesindeyse ekranı yenile
   const kursSection = document.getElementById('section-kurs');
@@ -283,12 +283,12 @@ window.checkNewKursAssignmentToasts = function () {
   try {
     const mine = kursAssignments.filter(a =>
       a.studentUsernames && a.studentUsernames.includes(currentUsername));
-    const seen = JSON.parse(localStorage.getItem(appStoreKey('kurs_seen_assign_ids')) || '[]');
+    const seen = JSON.parse(localStorage.getItem('y_kurs_seen_assign_ids') || '[]');
     const seenSet = new Set(seen);
-    if (!localStorage.getItem(appStoreKey('kurs_notify_init'))) {
+    if (!localStorage.getItem('y_kurs_notify_init')) {
       mine.forEach(a => seenSet.add(a.id));
-      localStorage.setItem(appStoreKey('kurs_seen_assign_ids'), JSON.stringify([...seenSet]));
-      localStorage.setItem(appStoreKey('kurs_notify_init'), '1');
+      localStorage.setItem('y_kurs_seen_assign_ids', JSON.stringify([...seenSet]));
+      localStorage.setItem('y_kurs_notify_init', '1');
       return;
     }
     mine.forEach(a => {
@@ -299,7 +299,7 @@ window.checkNewKursAssignmentToasts = function () {
         }
       }
     });
-    localStorage.setItem(appStoreKey('kurs_seen_assign_ids'), JSON.stringify([...seenSet]));
+    localStorage.setItem('y_kurs_seen_assign_ids', JSON.stringify([...seenSet]));
   } catch (e) { /* ignore */ }
 };
 

@@ -1,6 +1,6 @@
 // --- API ANAHTARINI HAFIZADAN YÜKLE ---
 document.addEventListener("DOMContentLoaded", () => {
-    const savedKey = localStorage.getItem(appStoreKey("gemini_api_key"));
+    const savedKey = localStorage.getItem("gemini_api_key");
     if (savedKey) {
         document.getElementById('ai-api-key').value = savedKey;
     }
@@ -29,10 +29,7 @@ function initSpeechRecognition() {
     }
 
     recognition = new SpeechRecognition();
-    recognition.lang =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en"
-        ? "en-US"
-        : "el-GR";
+    recognition.lang = 'en-US'; // Listen in English
     recognition.interimResults = false;
     recognition.maxAlternatives = 1;
 
@@ -73,11 +70,7 @@ function stopMicrophone() {
     isRecording = false;
     document.getElementById('mic-btn').style.background = "var(--error)";
     document.getElementById('mic-btn').classList.remove('pulse-animation');
-    const ph =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en"
-        ? "Veya mesajınızı İngilizce olarak buraya yazın..."
-        : "Veya mesajınızı Yunanca olarak buraya yazın...";
-    document.getElementById('chat-text-input').placeholder = ph;
+        document.getElementById('chat-text-input').placeholder = "Or type your message in English...";
 }
 
 // --- 2. SOHBET VE YAPAY ZEKA MANTIĞI ---
@@ -88,7 +81,7 @@ function startAIChat() {
         return;
     }
     
-    localStorage.setItem(appStoreKey("gemini_api_key"), apiKey);
+    localStorage.setItem("gemini_api_key", apiKey);
     
     const hint = document.getElementById('chat-empty-hint');
     if (hint) hint.remove();
@@ -101,14 +94,11 @@ function startAIChat() {
         inp.removeAttribute('disabled');
     }
     
-    const isEn =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
-    const opening = isEn
-      ? `<span style="font-size: 1.1rem;">Hello! I'm here to help you practice English. What would you like to talk about today?</span>
-        <span style="color: var(--text-dim); font-size: 0.9rem; margin-top: 8px; display: block; border-top: 1px solid var(--border); padding-top: 5px;">🇹🇷 Merhaba! İngilizce pratik için buradayım. Bugün ne konuşmak istersin?</span>`
-      : `<span style="font-size: 1.1rem;">Γεια σου! Είμαι ο φίλος σου για εξάσκηση στα ελληνικά. Τι θέλεις να συζητήσουμε σήμερα;</span>
-        <span style="color: var(--text-dim); font-size: 0.9rem; margin-top: 8px; display: block; border-top: 1px solid var(--border); padding-top: 5px;">🇹🇷 Merhaba! Ben senin Yunanca pratik arkadaşınım. Bugün ne konuşmak istersin?</span>`;
-    appendMessage("AI", opening);
+    // Açılış mesajı
+    appendMessage("AI", `
+        <span style="font-size: 1.1rem;">Hello! I am your English practice partner. What would you like to talk about today?</span>
+        <span style="color: var(--text-dim); font-size: 0.9rem; margin-top: 8px; display: block; border-top: 1px solid var(--border); padding-top: 5px;">🇹🇷 Merhaba! Ben senin İngilizce pratik arkadaşınım. Bugün ne konuşmak istersin?</span>
+    `);
 }
 
 async function sendChatMessage() {
@@ -128,27 +118,18 @@ async function sendChatMessage() {
 
     const typingId = appendMessage("AI", "...");
 
-    const isEnChat =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
-    const systemInstructionText = isEnChat
-      ? `Sen Türkçe konuşanlar için gelişmiş İngilizce pratik asistanısın.
+    try {
+        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                // YAPAY ZEKA'NIN BEYNİNE GİZLİ TALİMAT (Kafası asla karışmayacak)
+                system_instruction: {
+                    parts: [{ 
+                        text: `Sen gelişmiş bir İngilizce dil pratik asistanısın. 
 Görevlerin:
-1. Kullanıcı bir rol verirse (örneğin barista, doktor), o role gir.
-2. A2–B1 seviyesinde doğal İngilizce ile cevap ver.
-3. Kullanıcının mesajında gramer veya kelime hatası varsa "hint" kısmında Türkçe düzelt.
-4. YALNIZCA geçerli bir JSON objesi döndür, markdown veya fazladan metin ASLA ekleme.
-
-JSON formatı (ai_greek alanına İngilizce yaz):
-{
-  "user_turkish": "Kullanıcı Türkçe yazdıysa aynen, değilse mesajın Türkçe çevirisi",
-  "hint": "Gramer/kelime hatası varsa Türkçe ipucu, yoksa boş",
-  "ai_greek": "Kullanıcıya vereceğin İngilizce cevap",
-  "ai_turkish": "İngilizce cevabın Türkçe çevirisi"
-}`
-      : `Sen gelişmiş bir Yunanca dil pratik asistanısın. 
-Görevlerin:
-1. Kullanıcı sana bir rol verirse (örneğin manav, garson, doktor), hemen o role bürün ve sohbete o karakterle devam et. Rol verilmezse normal bir Yunan arkadaş ol.
-2. A2-B1 seviyesinde, doğal günlük Yunanca ile cevap ver.
+1. Kullanıcı sana bir rol verirse (örneğin manav, garson, doktor), hemen o role bürün ve sohbete o karakterle devam et. Rol verilmezse normal bir İngilizce konuşma partneri ol.
+2. A2-B1 seviyesinde, doğal günlük İngilizce ile cevap ver.
 3. Kullanıcının mesajında gramer ή kelime hatası varsa Türkçe olarak "hint" (ipucu) kısmında düzelt.
 4. YALNIZCA geçerli bir JSON objesi döndür, markdown veya fazladan metin ASLA ekleme.
 
@@ -156,17 +137,10 @@ Lütfen sadece şu JSON formatında yanıt ver:
 {
   "user_turkish": "Kullanıcının mesajının tam Türkçe çevirisi (kullanıcı zaten Türkçe yazdıysa aynen bırak)",
   "hint": "Gramer/kelime hatası varsa Türkçe düzeltme ipucu (Örn: 💡 İpucu: ...), hata yoksa boş bırak",
-  "ai_greek": "Kullanıcıya vereceğin Yunanca cevap (Role uygun olarak)",
-  "ai_turkish": "Yunanca cevabının Türkçe çevirisi"
-}`;
-
-    try {
-        const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                system_instruction: {
-                    parts: [{ text: systemInstructionText }]
+  "ai_english": "Kullanıcıya vereceğin İngilizce cevap (role uygun olarak)",
+  "ai_turkish": "İngilizce cevabının Türkçe çevirisi"
+}` 
+                    }]
                 },
                 // KULLANICININ MESAJI
                 contents: [{
@@ -214,7 +188,7 @@ Lütfen sadece şu JSON formatında yanıt ver:
             finalAiMessage += `<span style="color: var(--accent2); font-size: 0.9rem; display: block; margin-bottom: 8px; border-bottom: 1px dashed var(--border); padding-bottom: 5px;">${parsedData.hint}</span>`;
         }
         
-        finalAiMessage += `<span style="font-size: 1.1rem;">${parsedData.ai_greek}</span>`;
+        finalAiMessage += `<span style="font-size: 1.1rem;">${parsedData.ai_english}</span>`;
         
         if (parsedData.ai_turkish) {
             finalAiMessage += `<span style="color: var(--text-dim); font-size: 0.9rem; margin-top: 8px; display: block; border-top: 1px solid var(--border); padding-top: 5px;">🇹🇷 ${parsedData.ai_turkish}</span>`;
@@ -222,8 +196,8 @@ Lütfen sadece şu JSON formatında yanıt ver:
 
         appendMessage("AI", finalAiMessage);
         
-        // 3. SADECE YUNANCA KISMI SESLENDİR!
-        speakText(parsedData.ai_greek);
+        // 3. SADECE INGILIZCE KISMI SESLENDIR!
+        speakText(parsedData.ai_english);
 
     } catch (error) {
         console.error("İnternet/Bağlantı Hatası:", error);
@@ -253,7 +227,7 @@ function appendMessage(sender, text) {
         msgDiv.style.background = "var(--surface)";
         msgDiv.style.border = "1px solid var(--accent2)";
         msgDiv.style.color = "var(--text)";
-        msgDiv.innerHTML = `🤖 <b>Yorgo:</b><br> ${text}`;
+        msgDiv.innerHTML = `🤖 <b>Coach:</b><br> ${text}`;
     } else {
         const safeText = escapeHtml(text).replace(/\r?\n/g, "<br>");
         msgDiv.style.alignSelf = "flex-end";
@@ -270,16 +244,9 @@ function appendMessage(sender, text) {
 async function speakText(text) {
     if (!text) return;
 
-    const ttsLang =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en"
-        ? "en-US"
-        : "el-GR";
-
     try {
-        const audioUrl =
-          typeof generateGoogleTTS === "function"
-            ? await generateGoogleTTS(text, ttsLang)
-            : null;
+        // Senin uygulamanın kurulu olan kaliteli Google Cloud TTS altyapısını çağırıyoruz
+        const audioUrl = await generateGoogleTTS(text, "en-US"); 
         
         if (audioUrl) {
             const audio = new Audio(audioUrl);
@@ -294,27 +261,12 @@ async function speakText(text) {
 
 function fallbackSpeak(text) {
     const utterance = new SpeechSynthesisUtterance(text);
-    const isEn =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en";
-    utterance.lang = isEn ? "en-US" : "el-GR";
-
+    utterance.lang = 'en-US'; // English speech
+    
     const voices = window.speechSynthesis.getVoices();
-    const pick = voices.find((voice) =>
-      isEn ? voice.lang.startsWith("en") : voice.lang.startsWith("el"),
-    );
-    if (pick) utterance.voice = pick;
+    const englishVoice = voices.find(voice => voice.lang.startsWith('en'));
+    if (englishVoice) utterance.voice = englishVoice;
 
     utterance.rate = 0.9; 
     window.speechSynthesis.speak(utterance);
 }
-
-function applyCourseToChat() {
-  if (!recognition) return;
-  try {
-    recognition.lang =
-      typeof getTargetLexLang === "function" && getTargetLexLang() === "en"
-        ? "en-US"
-        : "el-GR";
-  } catch (e) {}
-}
-window.applyCourseToChat = applyCourseToChat;
