@@ -1,0 +1,19 @@
+TRANSPORTATION IN TURKEY
+There are two important types of transportation in Turkey: Railway
+transportation and highway transportation. Highway vehicles (trucks, buses,
+cars, etc.) transport 90% of the passengers and 75% of the cargo in Turkey;
+but trains carry only 5% of the passengers and 25% of the cargo.
+Now, we can compare the costs of trucks and trains. We want to transport
+1500 tons of cargo. One truck can carry 10 tons, but one train wagon can
+carry 50 tons. We need 150 trucks but only 30 train wagons for 1500 tons of
+cargo.
+1 train wagon can carry 50 tons.  		
+1 train wagon costs $30,000.			1 truck can carry 10 tons. 
+1 locomotive costs $2,000,000.			1 truck costs $30,000.
+1 locomotive + 30 wagons cost $2,900,000.	150 trucks cost $3,600,000. 
+Now, you can see which costs less and which costs more. There is
+another advantage of railway transport. We can use a train wagon for more
+years than we can use a truck.
+We have to think about the cost of fuel for these vehicles, too. Trains use
+coal but trucks use petrol. We all know petrol is more expensive than coal.
+That's why trains are more economical than trucks. 
