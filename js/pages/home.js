@@ -530,7 +530,7 @@ function renderTextLibrary() {
   const container = document.getElementById("panel-library");
   let html = `<div style="text-align:center; margin-bottom:25px;">
                 <h3 style="color:var(--accent); font-size: 1.6rem; margin-bottom:5px;">📚 Okuma Kütüphanesi</h3>
-                <p style="color:var(--text-dim); font-size:0.95rem;">Önce seviye kutucuğuna tıklayın, ardından açılan menüden metninizi seçin.</p>
+                <p style="color:var(--text-dim); font-size:0.95rem;">Önce <strong>Read At Work - 1</strong> kutucuğuna tıklayın, ardından listeden metninizi seçin.</p>
               </div>`;
   html += `<div style="margin-bottom:18px; background:var(--surface-alt); border:1px solid var(--border); border-radius:10px; padding:14px;">
     <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
@@ -547,12 +547,18 @@ function renderTextLibrary() {
     const textsInLevel = METIN_KATALOGU.filter((t) => t.level === level);
     if (textsInLevel.length > 0) {
       const safeLevel = level.replace(/[^a-zA-Z0-9]/g, "_");
+      const levelCardTitle = String(level).includes("Read At Work")
+        ? level
+        : `${level} Seviyesi`;
+      const folderHeading = String(level).includes("Read At Work")
+        ? `📂 ${level}`
+        : `📂 ${level} Metinleri`;
 
       // 1. KISIM: Seviye Kutucuğu
       html += `
         <div class="text-card" onclick="toggleLevelFolder('${safeLevel}')" style="text-align: center; border: 2px solid var(--accent); background: rgba(79, 142, 247, 0.05); padding: 20px; cursor: pointer;">
           <div style="font-size: 2.5rem; margin-bottom: 10px;">🎓</div>
-          <div class="text-card-title" style="font-size: 1.3rem; margin-bottom: 5px;">${level} Seviyesi</div>
+          <div class="text-card-title" style="font-size: 1.3rem; margin-bottom: 5px;">${levelCardTitle}</div>
           <div style="color: var(--text-dim); font-size: 0.9rem;">${textsInLevel.length} Okuma Parçası ➔</div>
         </div>`;
 
@@ -560,7 +566,7 @@ function renderTextLibrary() {
       html += `
       <div id="folder-${safeLevel}" class="level-folder-content" style="display: none; grid-column: 1 / -1; background: var(--surface-alt); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; animation: fadeIn 0.3s ease; box-shadow: var(--shadow);">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom: 1px solid var(--border); padding-bottom: 10px; margin-bottom: 20px;">
-            <h4 style="color:var(--accent); font-size: 1.2rem; margin:0;">📂 ${level} Metinleri</h4>
+            <h4 style="color:var(--accent); font-size: 1.2rem; margin:0;">${folderHeading}</h4>
             <button class="secondary-btn" onclick="toggleLevelFolder('${safeLevel}')" style="padding: 5px 10px; font-size: 0.85rem; border-color: var(--error); color: var(--error);">✕ Kapat</button>
         </div>`;
 
@@ -607,10 +613,13 @@ async function openSampleText(id) {
     const text = await res.text();
     const sanitizedText = sanitizeTextForEnglishLearning(text, id);
     document.getElementById("input-text").value = sanitizedText;
+    const catalogRow = Array.isArray(METIN_KATALOGU)
+      ? METIN_KATALOGU.find((t) => t && t.id === id)
+      : null;
     currentReadingWorkMeta = {
       sourceType: "sample",
       sourceId: id,
-      title: `Örnek Metin: ${id}`,
+      title: (catalogRow && catalogRow.title) || `Örnek Metin: ${id}`,
     };
     processAndRenderText();
     showToastMessage("✅ Metin başarıyla yüklendi!");
